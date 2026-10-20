@@ -74,15 +74,28 @@
             };
         };
 
+        // 【核心除錯防呆】支援各種 Google 試算表回傳的時間格式解析
         const doesSlotMatchDate = (slot, dateStr) => {
-            if (slot.date.startsWith(dateStr)) return true;
-            const d = new Date(dateStr);
-            const m = d.getMonth() + 1;
-            const day = d.getDate();
-            const md1 = `${m}/${day}`;
-            const md2 = `${String(m).padStart(2,'0')}/${String(day).padStart(2,'0')}`;
-            const tokens = slot.date.split(/[\s,()]+/);
-            return tokens.includes(md1) || tokens.includes(md2);
+            if (!slot || !slot.date) return false;
+            const sDate = String(slot.date);
+            
+            // 1. 直觀比對 (例如 '2026-10-28' 包含於 '2026-10-28 (週三)')
+            if (sDate.includes(dateStr)) return true;
+            
+            // 2. 處理 Google Sheets 偷轉的 ISO 日期格式 (如 '2026-10-27T16:00:00.000Z')
+            if (sDate.includes('T') && sDate.includes('Z')) {
+                const dObj = new Date(sDate);
+                if (formatDate(dObj) === dateStr) return true;
+            }
+            
+            // 3. 處理月繳格式 (如 '11/4, 11/11') 或是舊的 '2026/11/4'
+            const target = new Date(dateStr);
+            const m = target.getMonth() + 1;
+            const d = target.getDate();
+            const reg = new RegExp(`(^|[^\\d/])(0?${m}/0?${d})([^\\d/]|$)`);
+            if (reg.test(sDate)) return true;
+            
+            return false;
         };
 
         const fetchAPI = async (payload) => {
@@ -162,7 +175,11 @@
           const userLevel = userRecord.level || 1;
 
           useEffect(() => {
-            fetchAPI({ action: 'getSlots' }).then(res => setSlots(res.slots || []));
+            fetchAPI({ action: 'getSlots' }).then(res => {
+                // 過濾掉試算表中的完全空白行
+                const validSlots = (res.slots || []).filter(s => s.id && s.title && s.date);
+                setSlots(validSlots);
+            });
           }, []);
 
           const handleBook = async (slot, type = null, customPrice = null) => {
@@ -186,7 +203,7 @@
           const nextMonth = () => setCurrentMonth(new Date(year, month + 1, 1));
           const prevMonth = () => setCurrentMonth(new Date(year, month - 1, 1));
 
-          // 這裡不再濾掉 s.remaining > 0，這樣額滿的課也會出現在清單中
+          // 選定日期的清單，不論是否額滿都抓取出來顯示
           const dailySlots = slots.filter(s => doesSlotMatchDate(s, selectedDate));
 
           if (status === 'success') return (
@@ -226,10 +243,10 @@
                       if (!day) return <div key={i} className="h-10"></div>;
                       const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
                       
-                      // 判斷紅、藍、綠點的條件
+                      // 判斷該日期是否有對應的課程狀態
                       const hasAvailableGroupClass = slots.some(s => doesSlotMatchDate(s, dateStr) && Number(s.remaining) > 0 && !s.title.startsWith('[專屬教練課]'));
                       const hasAvailableCoachSlot = slots.some(s => doesSlotMatchDate(s, dateStr) && Number(s.remaining) > 0 && s.title.startsWith('[專屬教練課]'));
-                      const hasBookedOutSlot = slots.some(s => doesSlotMatchDate(s, dateStr) && Number(s.remaining) === 0);
+                      const hasBookedOutSlot = slots.some(s => doesSlotMatchDate(s, dateStr) && Number(s.remaining) <= 0); // 包含 0 以下防呆
                       
                       const isSelected = dateStr === selectedDate;
                       const isToday = dateStr === formatDate(new Date());
@@ -239,7 +256,7 @@
                           <div className={`w-8 h-8 flex items-center justify-center rounded-full text-sm transition-colors ${isSelected ? 'bg-emerald-600 text-white font-bold shadow-md' : isToday ? 'bg-emerald-100 text-emerald-800 font-bold' : 'text-gray-700 hover:bg-gray-100'}`}>
                             {day}
                           </div>
-                          {/* 顯示標示點 */}
+                          {/* 顯示狀態點點 */}
                           <div className="flex gap-1 mt-1 justify-center w-full">
                               {hasAvailableGroupClass && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>}
                               {hasAvailableCoachSlot && <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>}
@@ -251,9 +268,9 @@
                 </div>
                 {/* 點點圖例說明 */}
                 <div className="flex justify-center gap-4 mt-4 text-[10px] text-gray-500">
-                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>有團課</div>
-                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>有教練課</div>
-                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>已額滿</div>
+                    <div className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-500 rounded-full"></div>可約團課</div>
+                    <div className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 rounded-full"></div>教練時段</div>
+                    <div className="flex items-center gap-1"><div className="w-2 h-2 bg-red-500 rounded-full"></div>已額滿</div>
                 </div>
               </div>
 
@@ -269,7 +286,7 @@
                     <div className="space-y-4">
                         {dailySlots.map(slot => {
                           const isCoachSlot = slot.title.startsWith('[專屬教練課]');
-                          const isFull = Number(slot.remaining) === 0; // 判斷是否額滿
+                          const isFull = Number(slot.remaining) <= 0;
 
                           if (isCoachSlot) {
                               const match = slot.title.match(/1v1:(\d+)\|1v2:(\d+)/);
@@ -349,7 +366,7 @@
                                   )}
                                 </div>
                                 <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${isFull ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
-                                    {isFull ? '已額滿' : `剩餘 ${slot.remaining} 名額`}
+                                    {isFull ? '已滿班' : `剩餘 ${slot.remaining} 名額`}
                                 </span>
                               </div>
                             </div>
@@ -388,7 +405,8 @@
                 fetchAPI({ action: 'getSlots' })
             ]).then(([bookRes, slotsRes]) => {
                 setBookings(bookRes.bookings || []);
-                setSlots(slotsRes.slots || []);
+                const validSlots = (slotsRes.slots || []).filter(s => s.id && s.title && s.date);
+                setSlots(validSlots);
             });
           };
 
@@ -590,7 +608,7 @@
                               ) : (
                                   slots.map((s, idx) => {
                                     const booked = s.capacity - s.remaining;
-                                    const isFull = booked === s.capacity;
+                                    const isFull = booked >= s.capacity;
                                     const isCoachSlot = s.title.startsWith('[專屬教練課]');
                                     const displayTitle = isCoachSlot ? '教練開放時段' : s.title;
 
