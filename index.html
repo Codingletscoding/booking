@@ -53,28 +53,24 @@
             return days[new Date(dateString).getDay()];
         };
 
-        // 【核心升級】自動計算該月份包含幾個該星期
         const getMonthlyDatesInfo = (startDateStr) => {
             if (!startDateStr) return { text: '', count: 0 };
             const d = new Date(startDateStr);
             const year = d.getFullYear();
             const month = d.getMonth();
-            const targetDayOfWeek = d.getDay(); // 取得是星期幾
+            const targetDayOfWeek = d.getDay(); 
 
             const dates = [];
-            // 從該月 1 號檢查到 31 號
             for (let day = 1; day <= 31; day++) {
                 const tempDate = new Date(year, month, day);
-                // 如果月份跳到下個月，代表這個月結束了，提早跳出迴圈
                 if (tempDate.getMonth() !== month) break; 
-                // 如果星期幾符合，就加入清單
                 if (tempDate.getDay() === targetDayOfWeek) {
                     dates.push(`${tempDate.getMonth() + 1}/${tempDate.getDate()}`);
                 }
             }
             return {
                 text: `${dates.join(', ')} (${getDayOfWeek(startDateStr)})`,
-                count: dates.length // 這裡會自動算出是 4 堂還是 5 堂
+                count: dates.length 
             };
         };
 
@@ -190,7 +186,8 @@
           const nextMonth = () => setCurrentMonth(new Date(year, month + 1, 1));
           const prevMonth = () => setCurrentMonth(new Date(year, month - 1, 1));
 
-          const dailySlots = slots.filter(s => doesSlotMatchDate(s, selectedDate) && s.remaining > 0);
+          // 這裡不再濾掉 s.remaining > 0，這樣額滿的課也會出現在清單中
+          const dailySlots = slots.filter(s => doesSlotMatchDate(s, selectedDate));
 
           if (status === 'success') return (
             <div className="max-w-md mx-auto mt-10 p-8 text-center bg-white rounded-xl shadow-md">
@@ -229,24 +226,34 @@
                       if (!day) return <div key={i} className="h-10"></div>;
                       const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
                       
-                      const hasGroupClass = slots.some(s => doesSlotMatchDate(s, dateStr) && s.remaining > 0 && !s.title.startsWith('[專屬教練課]'));
-                      const hasCoachSlot = slots.some(s => doesSlotMatchDate(s, dateStr) && s.remaining > 0 && s.title.startsWith('[專屬教練課]'));
+                      // 判斷紅、藍、綠點的條件
+                      const hasAvailableGroupClass = slots.some(s => doesSlotMatchDate(s, dateStr) && Number(s.remaining) > 0 && !s.title.startsWith('[專屬教練課]'));
+                      const hasAvailableCoachSlot = slots.some(s => doesSlotMatchDate(s, dateStr) && Number(s.remaining) > 0 && s.title.startsWith('[專屬教練課]'));
+                      const hasBookedOutSlot = slots.some(s => doesSlotMatchDate(s, dateStr) && Number(s.remaining) === 0);
                       
                       const isSelected = dateStr === selectedDate;
                       const isToday = dateStr === formatDate(new Date());
 
                       return (
-                        <div key={i} onClick={() => setSelectedDate(dateStr)} className="h-14 flex flex-col items-center justify-start cursor-pointer">
+                        <div key={i} onClick={() => setSelectedDate(dateStr)} className="h-14 flex flex-col items-center justify-start cursor-pointer relative">
                           <div className={`w-8 h-8 flex items-center justify-center rounded-full text-sm transition-colors ${isSelected ? 'bg-emerald-600 text-white font-bold shadow-md' : isToday ? 'bg-emerald-100 text-emerald-800 font-bold' : 'text-gray-700 hover:bg-gray-100'}`}>
                             {day}
                           </div>
-                          <div className="flex gap-1 mt-1">
-                              {hasGroupClass && <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>}
-                              {hasCoachSlot && <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>}
+                          {/* 顯示標示點 */}
+                          <div className="flex gap-1 mt-1 justify-center w-full">
+                              {hasAvailableGroupClass && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>}
+                              {hasAvailableCoachSlot && <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>}
+                              {hasBookedOutSlot && <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>}
                           </div>
                         </div>
                       )
                     })}
+                </div>
+                {/* 點點圖例說明 */}
+                <div className="flex justify-center gap-4 mt-4 text-[10px] text-gray-500">
+                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>有團課</div>
+                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>有教練課</div>
+                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>已額滿</div>
                 </div>
               </div>
 
@@ -257,11 +264,12 @@
                 </h3>
                 
                 {dailySlots.length === 0 ? (
-                    <div className="text-center text-gray-400 py-8 bg-white rounded-xl border border-dashed">本日無可預約的時段</div>
+                    <div className="text-center text-gray-400 py-8 bg-white rounded-xl border border-dashed">本日無排定課程</div>
                 ) : (
                     <div className="space-y-4">
                         {dailySlots.map(slot => {
                           const isCoachSlot = slot.title.startsWith('[專屬教練課]');
+                          const isFull = Number(slot.remaining) === 0; // 判斷是否額滿
 
                           if (isCoachSlot) {
                               const match = slot.title.match(/1v1:(\d+)\|1v2:(\d+)/);
@@ -272,69 +280,77 @@
                               const my1v2 = Math.round(base1v2 * discount);
 
                               return (
-                                <div key={slot.id} className="border p-4 rounded-xl flex flex-col shadow-sm transition bg-indigo-50 border-l-4 border-l-indigo-500 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 bg-indigo-200 text-indigo-800 text-[10px] px-2 py-1 rounded-bl-lg font-bold tracking-wide">教練開放時段</div>
-                                    <div className="font-bold text-lg text-indigo-800 mt-1">教練專屬時段</div>
+                                <div key={slot.id} className={`border p-4 rounded-xl flex flex-col shadow-sm transition relative overflow-hidden ${isFull ? 'bg-gray-50 border-l-4 border-l-gray-400 opacity-80' : 'bg-green-50 border-l-4 border-l-green-500'}`}>
+                                    <div className={`absolute top-0 right-0 text-[10px] px-2 py-1 rounded-bl-lg font-bold tracking-wide ${isFull ? 'bg-gray-200 text-gray-600' : 'bg-green-200 text-green-800'}`}>教練開放時段</div>
+                                    <div className={`font-bold text-lg mt-1 ${isFull ? 'text-gray-500' : 'text-green-800'}`}>教練專屬時段</div>
                                     <div className="font-semibold text-gray-800 mt-1 text-sm">{slot.date}</div>
                                     <div className="text-sm text-gray-500 mt-1">{slot.time} • {slot.location}</div>
                                     
-                                    <div className="mt-4 pt-3 border-t border-indigo-100 flex flex-col gap-2.5">
-                                        <div className="flex justify-between items-center bg-white p-2.5 rounded border border-indigo-100 shadow-sm">
-                                            <div>
-                                                <span className="font-bold text-indigo-700 text-sm">1對1 教練課</span>
+                                    <div className={`mt-4 pt-3 border-t flex flex-col gap-2.5 ${isFull ? 'border-gray-200' : 'border-green-100'}`}>
+                                        <div className={`flex justify-between items-center p-2.5 rounded border shadow-sm ${isFull ? 'bg-gray-100 border-gray-200' : 'bg-white border-green-100'}`}>
+                                            <div className={isFull ? 'opacity-60' : ''}>
+                                                <span className={`font-bold text-sm ${isFull ? 'text-gray-500' : 'text-green-700'}`}>1對1 教練課</span>
                                                 <div className="mt-0.5">
-                                                    <span className="text-emerald-600 font-bold">NT$ {my1v1}</span>
+                                                    <span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold`}>NT$ {my1v1}</span>
                                                     {Number(userLevel) > 1 && <span className="text-gray-400 line-through text-xs ml-2">NT$ {base1v1}</span>}
                                                 </div>
                                             </div>
-                                            <button onClick={() => handleBook(slot, '1對1', my1v1)} disabled={status==='booking'} className="bg-indigo-600 text-white font-bold py-1.5 px-4 rounded-lg hover:bg-indigo-700 text-sm transition-colors">預約 1對1</button>
+                                            <button onClick={() => handleBook(slot, '1對1', my1v1)} disabled={status==='booking' || isFull} className={`font-bold py-1.5 px-4 rounded-lg text-sm transition-colors ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>
+                                                {isFull ? '已額滿' : '預約 1對1'}
+                                            </button>
                                         </div>
-                                        <div className="flex justify-between items-center bg-white p-2.5 rounded border border-indigo-100 shadow-sm">
-                                            <div>
-                                                <span className="font-bold text-indigo-700 text-sm">1對2 教練課</span>
+                                        <div className={`flex justify-between items-center p-2.5 rounded border shadow-sm ${isFull ? 'bg-gray-100 border-gray-200' : 'bg-white border-green-100'}`}>
+                                            <div className={isFull ? 'opacity-60' : ''}>
+                                                <span className={`font-bold text-sm ${isFull ? 'text-gray-500' : 'text-green-700'}`}>1對2 教練課</span>
                                                 <div className="mt-0.5">
-                                                    <span className="text-emerald-600 font-bold">NT$ {my1v2}</span>
+                                                    <span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold`}>NT$ {my1v2}</span>
                                                     {Number(userLevel) > 1 && <span className="text-gray-400 line-through text-xs ml-2">NT$ {base1v2}</span>}
                                                 </div>
                                             </div>
-                                            <button onClick={() => handleBook(slot, '1對2', my1v2)} disabled={status==='booking'} className="bg-indigo-600 text-white font-bold py-1.5 px-4 rounded-lg hover:bg-indigo-700 text-sm transition-colors">預約 1對2</button>
+                                            <button onClick={() => handleBook(slot, '1對2', my1v2)} disabled={status==='booking' || isFull} className={`font-bold py-1.5 px-4 rounded-lg text-sm transition-colors ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>
+                                                {isFull ? '已額滿' : '預約 1對2'}
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
                               );
                           }
 
-                          // 一般團課 (加入 4 或 5 堂的標示)
+                          // 一般團課
                           const originalPrice = slot.prices[1]; 
                           const myPrice = slot.prices[userLevel]; 
                           const isDiscounted = userLevel > 1 && myPrice < originalPrice; 
 
                           return (
-                            <div key={slot.id} className="border p-4 rounded-xl flex flex-col hover:shadow-md transition bg-white border-l-4 border-l-emerald-500 relative overflow-hidden">
-                              {slot.title.includes('[月繳') && <div className="absolute top-0 right-0 bg-amber-100 text-amber-800 text-[10px] px-2 py-1 rounded-bl-lg font-bold">套裝課程</div>}
+                            <div key={slot.id} className={`border p-4 rounded-xl flex flex-col shadow-sm transition relative overflow-hidden ${isFull ? 'bg-gray-50 border-l-4 border-l-gray-400 opacity-80' : 'bg-white border-l-4 border-l-blue-500 hover:shadow-md'}`}>
+                              {slot.title.includes('[月繳') && <div className={`absolute top-0 right-0 text-[10px] px-2 py-1 rounded-bl-lg font-bold ${isFull ? 'bg-gray-200 text-gray-600' : 'bg-amber-100 text-amber-800'}`}>套裝課程</div>}
                               
                               <div className="flex justify-between items-start mt-1">
-                                <div className="w-3/4">
-                                  <div className="font-bold text-lg text-emerald-700">{slot.title}</div>
+                                <div className={`w-3/4 ${isFull ? 'opacity-60' : ''}`}>
+                                  <div className={`font-bold text-lg ${isFull ? 'text-gray-500' : 'text-blue-700'}`}>{slot.title}</div>
                                   <div className="font-semibold text-gray-800 mt-1 text-sm leading-relaxed">{slot.date}</div>
                                   <div className="text-sm text-gray-500 mt-1">{slot.time} • {slot.location}</div>
                                 </div>
-                                <button onClick={() => handleBook(slot)} disabled={status==='booking'} className="bg-emerald-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-emerald-700 shadow-sm transition-colors">預約</button>
+                                <button onClick={() => handleBook(slot)} disabled={status==='booking' || isFull} className={`font-bold py-2 px-5 rounded-lg shadow-sm transition-colors ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                                    {isFull ? '已額滿' : '預約'}
+                                </button>
                               </div>
                               
-                              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between w-full">
+                              <div className={`mt-3 pt-3 border-t flex items-center justify-between w-full ${isFull ? 'border-gray-200 opacity-60' : 'border-gray-100'}`}>
                                 <div className="flex items-baseline gap-2">
                                   {isDiscounted ? (
                                     <>
-                                      <span className="text-emerald-600 font-bold text-lg">NT$ {myPrice}</span>
+                                      <span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold text-lg`}>NT$ {myPrice}</span>
                                       <span className="text-gray-400 line-through text-sm">NT$ {originalPrice}</span>
-                                      <span className="bg-red-50 text-red-600 border border-red-200 text-[10px] px-1.5 py-0.5 rounded font-bold">專屬特價</span>
+                                      {!isFull && <span className="bg-red-50 text-red-600 border border-red-200 text-[10px] px-1.5 py-0.5 rounded font-bold">專屬特價</span>}
                                     </>
                                   ) : (
-                                    <span className="text-emerald-600 font-bold text-lg">NT$ {myPrice}</span>
+                                    <span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold text-lg`}>NT$ {myPrice}</span>
                                   )}
                                 </div>
-                                <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">剩餘 {slot.remaining} 名額</span>
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${isFull ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
+                                    {isFull ? '已額滿' : `剩餘 ${slot.remaining} 名額`}
+                                </span>
                               </div>
                             </div>
                           );
@@ -364,7 +380,7 @@
           const [slots, setSlots] = useState([]);
           const [loading, setLoading] = useState(false);
 
-          const monthlyInfo = getMonthlyDatesInfo(form.date); // 即時計算當月堂數
+          const monthlyInfo = getMonthlyDatesInfo(form.date);
 
           const fetchData = () => {
             Promise.all([
@@ -386,7 +402,7 @@
             let finalCapacity = form.capacity;
 
             if (form.mode === 'monthly') {
-                finalTitle = `[月繳${monthlyInfo.count}堂] ${form.title}`; // 自動填入 4 堂或 5 堂
+                finalTitle = `[月繳${monthlyInfo.count}堂] ${form.title}`;
             } else if (form.mode === 'coach') {
                 finalTitle = `[專屬教練課] 1v1:${form.coachBase1v1}|1v2:${form.coachBase1v2}`;
                 finalCapacity = 1; 
