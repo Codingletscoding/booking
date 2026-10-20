@@ -19,13 +19,25 @@
         const API_URL = 'https://script.google.com/macros/s/AKfycbzEgH-9zNLvzhNzsZISAc6a3IY4ojbMhpYDUPOgkFElBt1pqTYhJINyaezPfEjMlo9KLA/exec';
         const LIFF_ID = '2012115245-A7HBSYsv';
 
-        // 等級名稱對照表
-        const LEVEL_NAMES = {
-            1: '普通',
-            2: 'VIP',
-            3: 'VVIP',
-            4: 'SVVIP',
-            5: 'GVIP'
+        const LEVEL_NAMES = { 1: '普通', 2: 'VIP', 3: 'VVIP', 4: 'SVVIP', 5: 'GVIP' };
+
+        // 產生 30 分鐘為單位的時間選項 (06:00 ~ 23:30)
+        const generateTimeOptions = () => {
+            const times = [];
+            for (let h = 6; h <= 23; h++) {
+                const hour = h.toString().padStart(2, '0');
+                times.push(`${hour}:00`, `${hour}:30`);
+            }
+            return times;
+        };
+        const timeOptions = generateTimeOptions();
+
+        // 根據日期字串轉換為星期幾
+        const getDayOfWeek = (dateString) => {
+            if (!dateString) return '';
+            const days = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+            const date = new Date(dateString);
+            return days[date.getDay()];
         };
 
         const fetchAPI = async (payload) => {
@@ -44,9 +56,8 @@
 
           useEffect(() => {
             liff.init({ liffId: LIFF_ID }).then(() => {
-              if (!liff.isLoggedIn()) {
-                liff.login();
-              } else {
+              if (!liff.isLoggedIn()) liff.login();
+              else {
                 liff.getProfile().then(profile => {
                   setLiffState({ init: true, profile });
                   checkUser(profile.userId);
@@ -61,14 +72,9 @@
 
           const checkUser = async (lineId) => {
             const res = await fetchAPI({ action: 'checkUser', lineId });
-            if (res.isAdmin) {
-              setView('coach');
-            } else if (res.isRegistered) {
-              setUserRecord(res.user);
-              setView('student');
-            } else {
-              setView('register');
-            }
+            if (res.isAdmin) setView('coach');
+            else if (res.isRegistered) { setUserRecord(res.user); setView('student'); } 
+            else setView('register');
           };
 
           if (view === 'loading') return <div className="p-10 text-center text-gray-500">載入中...</div>;
@@ -162,10 +168,11 @@
         // --- 教練：後台管理 ---
         const CoachDashboard = () => {
           const [form, setForm] = useState({ 
-            title: '成人初階班',
+            title: '新手團課',
             location: '關聖里活動中心',
             date: '', 
-            time: '19:00 - 21:00', 
+            startTime: '19:00',
+            endTime: '21:00', 
             capacity: '6', 
             prices: { 1: 300, 2: 280, 3: 260, 4: 240, 5: 200 } 
           });
@@ -177,9 +184,22 @@
           const handleAddSlot = async (e) => {
             e.preventDefault();
             setLoading(true);
-            await fetchAPI({ action: 'addSlot', ...form });
+            
+            // 組合日期(含星期)與時間
+            const dayName = getDayOfWeek(form.date);
+            const formattedDate = `${form.date} (${dayName})`;
+            const formattedTime = `${form.startTime} - ${form.endTime}`;
+
+            // 發送給後端
+            await fetchAPI({ 
+                action: 'addSlot', 
+                ...form, 
+                date: formattedDate, 
+                time: formattedTime 
+            });
+
             alert('課程時段新增成功！');
-            setForm({...form, date: ''}); // 清空日期方便連續新增
+            setForm({...form, date: ''}); 
             setLoading(false);
           };
 
@@ -193,27 +213,76 @@
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border col-span-1 h-fit">
                   <h2 className="font-bold text-lg mb-4 border-b pb-2">新增課程與分級定價</h2>
-                  <form onSubmit={handleAddSlot} className="space-y-3">
-                    <div><label className="block text-sm mb-1">課程名稱</label><input required className="w-full border p-2 rounded" value={form.title} onChange={e=>setForm({...form, title: e.target.value})} /></div>
-                    <div><label className="block text-sm mb-1">地點</label><input required className="w-full border p-2 rounded" value={form.location} onChange={e=>setForm({...form, location: e.target.value})} /></div>
+                  <form onSubmit={handleAddSlot} className="space-y-4">
                     
-                    <div className="flex gap-2">
-                        <div className="w-1/2"><label className="block text-sm mb-1">日期</label><input type="date" required className="w-full border p-2 rounded" value={form.date} onChange={e=>setForm({...form, date: e.target.value})} /></div>
-                        <div className="w-1/2"><label className="block text-sm mb-1">總名額</label><input type="number" required className="w-full border p-2 rounded" value={form.capacity} onChange={e=>setForm({...form, capacity: e.target.value})} /></div>
+                    {/* 課程名稱 (下拉選單) */}
+                    <div>
+                        <label className="block text-sm mb-1 text-gray-700">課程名稱</label>
+                        <select className="w-full border p-2 rounded bg-white outline-none" value={form.title} onChange={e=>setForm({...form, title: e.target.value})}>
+                            <option value="新手團課">新手團課</option>
+                            <option value="初階團課">初階團課</option>
+                            <option value="兒童團課">兒童團課</option>
+                            <option value="一對一各教">一對一各教</option>
+                        </select>
                     </div>
-                    <div><label className="block text-sm mb-1">時間</label><input required className="w-full border p-2 rounded" value={form.time} onChange={e=>setForm({...form, time: e.target.value})} /></div>
 
+                    {/* 地點 (下拉選單) */}
+                    <div>
+                        <label className="block text-sm mb-1 text-gray-700">地點</label>
+                        <select className="w-full border p-2 rounded bg-white outline-none" value={form.location} onChange={e=>setForm({...form, location: e.target.value})}>
+                            <option value="關聖里活動中心">關聖里活動中心</option>
+                            <option value="永康嘉世">永康嘉世</option>
+                            <option value="仁德羽潮">仁德羽潮</option>
+                            <option value="南區羽潮">南區羽潮</option>
+                        </select>
+                    </div>
+                    
+                    {/* 日期與星期 */}
+                    <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                            <label className="block text-sm mb-1 text-gray-700">日期</label>
+                            <input type="date" required className="w-full border p-2 rounded" value={form.date} onChange={e=>setForm({...form, date: e.target.value})} />
+                        </div>
+                        <div className="w-16 h-[42px] flex items-center justify-center bg-gray-100 border border-gray-200 rounded text-gray-600 font-bold text-sm">
+                            {getDayOfWeek(form.date) || '-'}
+                        </div>
+                    </div>
+
+                    {/* 時間 (30分鐘單位) */}
+                    <div className="flex gap-2 items-center">
+                        <div className="flex-1">
+                            <label className="block text-sm mb-1 text-gray-700">開始時間</label>
+                            <select className="w-full border p-2 rounded bg-white" value={form.startTime} onChange={e=>setForm({...form, startTime: e.target.value})}>
+                                {timeOptions.map(t => <option key={`start-${t}`} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                        <span className="pt-5 text-gray-400">至</span>
+                        <div className="flex-1">
+                            <label className="block text-sm mb-1 text-gray-700">結束時間</label>
+                            <select className="w-full border p-2 rounded bg-white" value={form.endTime} onChange={e=>setForm({...form, endTime: e.target.value})}>
+                                {timeOptions.map(t => <option key={`end-${t}`} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* 總名額 */}
+                    <div>
+                        <label className="block text-sm mb-1 text-gray-700">總名額</label>
+                        <input type="number" required min="1" className="w-full border p-2 rounded" value={form.capacity} onChange={e=>setForm({...form, capacity: e.target.value})} />
+                    </div>
+
+                    {/* 各等級價錢 */}
                     <div className="bg-gray-50 p-3 rounded border space-y-2 mt-4">
-                      <h3 className="text-sm font-bold text-gray-700">各等級收費設定</h3>
+                      <h3 className="text-sm font-bold text-gray-700">各等級收費設定 (NT$)</h3>
                       {[1,2,3,4,5].map(lvl => (
                         <div key={lvl} className="flex items-center text-sm">
                           <span className="w-16 font-semibold text-gray-600">{LEVEL_NAMES[lvl]}</span>
-                          <input type="number" required className="flex-1 border p-1 rounded px-2" value={form.prices[lvl]} onChange={e=>updatePrice(lvl, e.target.value)} />
+                          <input type="number" required min="0" className="flex-1 border p-1 rounded px-2" value={form.prices[lvl]} onChange={e=>updatePrice(lvl, e.target.value)} />
                         </div>
                       ))}
                     </div>
 
-                    <button type="submit" disabled={loading} className="w-full bg-slate-800 text-white p-2 rounded font-bold mt-2">上架時段</button>
+                    <button type="submit" disabled={loading} className="w-full bg-slate-800 text-white p-3 rounded font-bold mt-2">上架時段</button>
                   </form>
                 </div>
 
@@ -221,17 +290,21 @@
                   <h2 className="font-bold text-lg mb-4 border-b pb-2">近期預約名單 (含實收金額)</h2>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm whitespace-nowrap">
-                      <thead><tr className="bg-gray-50 text-gray-600">
+                      <thead><tr className="bg-gray-50 text-gray-600 border-b">
                         <th className="p-3">時段 ID</th><th className="p-3">學生姓名</th><th className="p-3">實收金額</th>
                       </tr></thead>
                       <tbody>
-                        {bookings.map((b, idx) => (
-                          <tr key={idx} className="border-b">
-                            <td className="p-3 font-mono text-xs text-gray-500">{b.slotId}</td>
-                            <td className="p-3 font-bold">{b.name}</td>
-                            <td className="p-3 text-emerald-600 font-bold">NT$ {b.paidPrice}</td>
-                          </tr>
-                        ))}
+                        {bookings.length === 0 ? (
+                            <tr><td colSpan="3" className="p-4 text-center text-gray-400">目前尚無預約資料</td></tr>
+                        ) : (
+                            bookings.map((b, idx) => (
+                              <tr key={idx} className="border-b hover:bg-gray-50">
+                                <td className="p-3 font-mono text-xs text-gray-400">{b.slotId}</td>
+                                <td className="p-3 font-bold text-gray-800">{b.name}</td>
+                                <td className="p-3 text-emerald-600 font-bold">NT$ {b.paidPrice}</td>
+                              </tr>
+                            ))
+                        )}
                       </tbody>
                     </table>
                   </div>
