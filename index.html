@@ -37,7 +37,6 @@
             return days[new Date(dateString).getDay()];
         };
 
-        // 自動推算 4 週日期的函數
         const calculateMonthlyDates = (startDateStr) => {
             if (!startDateStr) return '';
             const d = new Date(startDateStr);
@@ -148,27 +147,47 @@
                 <div>
                   <h1 className="text-xl font-bold">楽々羽球 預約系統</h1>
                   <p className="text-sm text-slate-300 mt-1">{userRecord.name}，歡迎回來！</p>
-                  <div className="mt-2 inline-block bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded">
+                  <div className="mt-2 inline-block bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded shadow-sm">
                     {LEVEL_NAMES[userLevel]} 會員
                   </div>
                 </div>
-                {profile.pictureUrl && <img src={profile.pictureUrl} className="w-12 h-12 rounded-full border-2 border-slate-600" />}
+                {profile.pictureUrl && <img src={profile.pictureUrl} className="w-12 h-12 rounded-full border-2 border-slate-600 shadow-md" />}
               </div>
               <div className="p-4 space-y-4">
-                {slots.filter(s => s.remaining > 0).map(slot => (
-                  <div key={slot.id} className="border p-4 rounded-lg flex justify-between items-center hover:shadow-md transition">
-                    <div className="w-3/4">
-                      <div className="font-bold text-lg text-emerald-700">{slot.title}</div>
-                      <div className="font-semibold text-gray-800 mt-1 text-sm leading-relaxed">{slot.date}</div>
-                      <div className="text-sm text-gray-500 mt-1">{slot.time} • {slot.location}</div>
-                      <div className="text-emerald-600 font-bold mt-2">
-                        NT$ {slot.prices[userLevel]}
-                        <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full ml-2">剩 {slot.remaining} 名</span>
+                {slots.filter(s => s.remaining > 0).map(slot => {
+                  const originalPrice = slot.prices[1]; // 普通級別的價錢當作原價
+                  const myPrice = slot.prices[userLevel]; // 學生的專屬價錢
+                  const isDiscounted = userLevel > 1 && myPrice < originalPrice; // 判斷是否享有特價
+
+                  return (
+                    <div key={slot.id} className="border p-4 rounded-xl flex flex-col hover:shadow-md transition bg-white">
+                      <div className="flex justify-between items-start">
+                        <div className="w-3/4">
+                          <div className="font-bold text-lg text-emerald-700">{slot.title}</div>
+                          <div className="font-semibold text-gray-800 mt-1 text-sm leading-relaxed">{slot.date}</div>
+                          <div className="text-sm text-gray-500 mt-1">{slot.time} • {slot.location}</div>
+                        </div>
+                        <button onClick={() => handleBook(slot)} disabled={status==='booking'} className="bg-emerald-100 text-emerald-700 font-bold py-2 px-5 rounded-lg hover:bg-emerald-200 transition-colors">預約</button>
+                      </div>
+                      
+                      {/* 價錢顯示區塊 */}
+                      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between w-full">
+                        <div className="flex items-baseline gap-2">
+                          {isDiscounted ? (
+                            <>
+                              <span className="text-emerald-600 font-bold text-lg">NT$ {myPrice}</span>
+                              <span className="text-gray-400 line-through text-sm">NT$ {originalPrice}</span>
+                              <span className="bg-red-50 text-red-600 border border-red-200 text-[10px] px-1.5 py-0.5 rounded font-bold">專屬特價</span>
+                            </>
+                          ) : (
+                            <span className="text-emerald-600 font-bold text-lg">NT$ {myPrice}</span>
+                          )}
+                        </div>
+                        <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">剩餘 {slot.remaining} 名</span>
                       </div>
                     </div>
-                    <button onClick={() => handleBook(slot)} disabled={status==='booking'} className="bg-emerald-100 text-emerald-700 font-bold py-2 px-4 rounded-lg hover:bg-emerald-200">預約</button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -177,7 +196,7 @@
         // --- 教練：後台管理 ---
         const CoachDashboard = () => {
           const [form, setForm] = useState({ 
-            mode: 'single', // 新增：單堂(single) 或 月繳(monthly)
+            mode: 'single', 
             title: '新手團課',
             location: '關聖里活動中心',
             date: '', 
@@ -195,7 +214,6 @@
             e.preventDefault();
             setLoading(true);
             
-            // 根據模式產生最終存入資料庫的 標題 與 日期字串
             const finalTitle = form.mode === 'monthly' ? `[月繳4堂] ${form.title}` : form.title;
             const finalDate = form.mode === 'monthly' 
                 ? calculateMonthlyDates(form.date) 
@@ -228,7 +246,6 @@
                   <h2 className="font-bold text-lg mb-4 border-b pb-2">新增課程與分級定價</h2>
                   <form onSubmit={handleAddSlot} className="space-y-4">
                     
-                    {/* 課程模式切換 */}
                     <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
                         <label className="block text-sm mb-2 font-bold text-emerald-800">課程類型</label>
                         <div className="flex gap-4">
@@ -302,6 +319,7 @@
                       <h3 className="text-sm font-bold text-gray-700">
                         {form.mode === 'monthly' ? '各等級 4 堂總收費 (NT$)' : '各等級單堂收費 (NT$)'}
                       </h3>
+                      <p className="text-xs text-gray-400 mb-2">普通(Lv.1)的定價會作為學生的原價顯示</p>
                       {[1,2,3,4,5].map(lvl => (
                         <div key={lvl} className="flex items-center text-sm">
                           <span className="w-16 font-semibold text-gray-600">{LEVEL_NAMES[lvl]}</span>
