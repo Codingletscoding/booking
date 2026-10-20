@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>楽々羽球</title>
+    <title>楽動羽球</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -16,7 +16,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // !!! 記得替換為你的 URL 和 LIFF ID !!!
+        // 已替換為專屬的 URL 和 LIFF ID
         const API_URL = 'https://script.google.com/macros/s/AKfycbzEgH-9zNLvzhNzsZISAc6a3IY4ojbMhpYDUPOgkFElBt1pqTYhJINyaezPfEjMlo9KLA/exec';
         const LIFF_ID = '2012115245-A7HBSYsv';
 
@@ -35,15 +35,17 @@
           const [view, setView] = useState('loading');
 
           useEffect(() => {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('view') === 'coach') return setView('coach');
+            // 已經移除舊版不安全的 ?view=coach 網址判斷，改由後端驗證身分
 
             liff.init({ liffId: LIFF_ID }).then(() => {
-              if (!liff.isLoggedIn()) liff.login();
-              else liff.getProfile().then(profile => {
-                setLiffState({ init: true, profile });
-                checkUser(profile.userId);
-              });
+              if (!liff.isLoggedIn()) {
+                liff.login();
+              } else {
+                liff.getProfile().then(profile => {
+                  setLiffState({ init: true, profile });
+                  checkUser(profile.userId);
+                });
+              }
             }).catch(() => {
               // 本地開發 Mock
               const mockProfile = { userId: 'U12345678', displayName: '測試用戶' };
@@ -54,10 +56,16 @@
 
           const checkUser = async (lineId) => {
             const res = await fetchAPI({ action: 'checkUser', lineId });
-            if (res.isRegistered) {
+            
+            // 依照後端回傳的身分決定要顯示哪一個畫面
+            if (res.isAdmin) {
+              setView('coach'); // 如果是教練名單內，自動進入後台
+            } else if (res.isRegistered) {
               setUserRecord(res.user);
-              setView('student');
-            } else setView('register');
+              setView('student'); // 已綁定學生，進入預約頁面
+            } else {
+              setView('register'); // 未註冊過，進入綁定頁面
+            }
           };
 
           if (view === 'loading') return <div className="p-10 text-center text-gray-500">載入中...</div>;
