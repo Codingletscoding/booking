@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>楽々羽球</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // !!! 記得替換為你的 URL 和 LIFF ID !!!
+        const API_URL = 'https://script.google.com/macros/s/你的_SCRIPT_ID/exec';
+        const LIFF_ID = '你的_LIFF_ID';
+
+        const fetchAPI = async (payload) => {
+          const res = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          });
+          return res.json();
+        };
+
+        const App = () => {
+          const [liffState, setLiffState] = useState({ init: false, profile: null });
+          const [userRecord, setUserRecord] = useState(null);
+          const [view, setView] = useState('loading');
+
+          useEffect(() => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('view') === 'coach') return setView('coach');
+
+            liff.init({ liffId: LIFF_ID }).then(() => {
+              if (!liff.isLoggedIn()) liff.login();
+              else liff.getProfile().then(profile => {
+                setLiffState({ init: true, profile });
+                checkUser(profile.userId);
+              });
+            }).catch(() => {
+              // 本地開發 Mock
+              const mockProfile = { userId: 'U12345678', displayName: '測試用戶' };
+              setLiffState({ init: true, profile: mockProfile });
+              checkUser(mockProfile.userId);
+            });
+          }, []);
+
+          const checkUser = async (lineId) => {
+            const res = await fetchAPI({ action: 'checkUser', lineId });
+            if (res.isRegistered) {
+              setUserRecord(res.user);
+              setView('student');
+            } else setView('register');
+          };
+
+          if (view === 'loading') return <div className="p-10 text-center text-gray-500">載入中...</div>;
+          if (view === 'register') return <RegisterView profile={liffState.profile} onRegistered={(u) => { setUserRecord(u); setView('student'); }} />;
+          if (view === 'student') return <StudentBookingView profile={liffState.profile} userRecord={userRecord} />;
+          if (view === 'coach') return <CoachDashboard />;
+        };
+
+        // --- 學生：首次註冊 ---
+        const RegisterView = ({ profile, onRegistered }) => {
+          const [form, setForm] = useState({ name: profile.displayName || '', age: '', phone: '' });
+          const [submitting, setSubmitting] = useState(false);
+
+          const handleSubmit = async (e) => {
+            e.preventDefault();
+            setSubmitting(true);
+            await fetchAPI({ action: 'registerUser', lineId: profile.userId, ...form });
+            // 剛註冊預設 Level 1
+            onRegistered({ ...form, level: 1 });
+          };
+
+          return (
+            <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-xl shadow-md">
+              <h2 className="text-2xl font-bold mb-2">哈囉！首次登入請綁定資料</h2>
+              <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                <div><label className="block text-sm mb-1">真實姓名</label><input required className="w-full border p-2 rounded" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} /></div>
+                <div><label className="block text-sm mb-1">年齡</label><input required type="number" className="w-full border p-2 rounded" value={form.age} onChange={e=>setForm({...form, age: e.target.value})} /></div>
+                <div><label className="block text-sm mb-1">聯絡電話</label><input required type="tel" className="w-full border p-2 rounded" value={form.phone} onChange={e=>setForm({...form, phone: e.target.value})} /></div>
+                <button type="submit" disabled={submitting} className="w-full bg-emerald-600 text-white p-3 rounded-lg font-bold">{submitting ? '綁定中...' : '確認綁定'}</button>
+              </form>
+            </div>
+          );
+        };
+
+        // --- 學生：預約頁面 ---
+        const StudentBookingView = ({ profile, userRecord }) => {
+          const [slots, setSlots] = useState([]);
+          const [status, setStatus] = useState('idle');
+          const userLevel = userRecord.level || 1; // 取出用戶等級
+
+          useEffect(() => {
+            fetchAPI({ action: 'getSlots' }).then(res => setSlots(res.slots || []));
+          }, []);
+
+          const handleBook = async (slot) => {
+            const myPrice = slot.prices[userLevel]; // 抓出專屬價格
+            if (!confirm(`確定預約 ${slot.date} ${slot.time}？\n專屬費用：NT$ ${myPrice}`)) return;
+            setStatus('booking');
+            await fetchAPI({ action: 'bookClass', slotId: slot.id, lineId: profile.userId, name: userRecord.name, paidPrice: myPrice });
+            setStatus('success');
+          };
+
+          if (status === 'success') return (
+            <div className="max-w-md mx-auto mt-10 p-8 text-center bg-white rounded-xl shadow-md">
+              <h2 className="text-2xl font-bold text-emerald-600 mb-4">預約成功！</h2>
+              <button onClick={() => window.location.reload()} className="bg-gray-800 text-white px-6 py-2 rounded">返回列表</button>
+            </div>
+          );
+
+          return (
+            <div className="max-w-md mx-auto bg-white min-h-screen">
+              <div className="bg-slate-800 p-6 text-white flex justify-between items-center">
+                <div>
+                  <h1 className="text-xl font-bold">楽々羽球 預約系統</h1>
+                  <p className="text-sm text-slate-300 mt-1">{userRecord.name}，歡迎回來！</p>
+                  <div className="mt-2 inline-block bg-emerald-500 text-xs font-bold px-2 py-1 rounded">Lv.{userLevel} 會員</div>
+                </div>
+                {profile.pictureUrl && <img src={profile.pictureUrl} className="w-12 h-12 rounded-full border-2 border-slate-600" />}
+              </div>
+              <div className="p-4 space-y-4">
+                {slots.filter(s => s.remaining > 0).map(slot => (
+                  <div key={slot.id} className="border p-4 rounded-lg flex justify-between items-center hover:shadow-md transition">
+                    <div>
+                      <div className="font-bold text-lg">{slot.date}</div>
+                      <div className="text-sm text-gray-500">{slot.time}</div>
+                      <div className="text-emerald-600 font-bold mt-1">
+                        NT$ {slot.prices[userLevel]}
+                        <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full ml-2">剩 {slot.remaining} 名</span>
+                      </div>
+                    </div>
+                    <button onClick={() => handleBook(slot)} disabled={status==='booking'} className="bg-emerald-100 text-emerald-700 font-bold py-2 px-4 rounded-lg hover:bg-emerald-200">預約</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        };
+
+        // --- 教練：後台管理 ---
+        const CoachDashboard = () => {
+          const [form, setForm] = useState({ date: '', time: '19:00 - 21:00', capacity: '6', prices: { 1: 300, 2: 280, 3: 260, 4: 240, 5: 200 } });
+          const [bookings, setBookings] = useState([]);
+          const [loading, setLoading] = useState(false);
+
+          useEffect(() => { fetchAPI({ action: 'getCoachData' }).then(res => setBookings(res.bookings || [])); }, []);
+
+          const handleAddSlot = async (e) => {
+            e.preventDefault();
+            setLoading(true);
+            await fetchAPI({ action: 'addSlot', ...form });
+            alert('時段與多級別價格設定成功！');
+            setForm({...form, date: ''});
+            setLoading(false);
+          };
+
+          const updatePrice = (level, value) => {
+            setForm(prev => ({ ...prev, prices: { ...prev.prices, [level]: value }}));
+          };
+
+          return (
+            <div className="max-w-4xl mx-auto p-6">
+              <h1 className="text-3xl font-bold text-slate-800 mb-8">教練管理後台</h1>
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-xl shadow-sm border col-span-1 h-fit">
+                  <h2 className="font-bold text-lg mb-4 border-b pb-2">新增課程與分級定價</h2>
+                  <form onSubmit={handleAddSlot} className="space-y-3">
+                    <div><label className="block text-sm mb-1">日期</label><input type="date" required className="w-full border p-2 rounded" value={form.date} onChange={e=>setForm({...form, date: e.target.value})} /></div>
+                    <div><label className="block text-sm mb-1">時間</label><input required className="w-full border p-2 rounded" value={form.time} onChange={e=>setForm({...form, time: e.target.value})} /></div>
+                    <div><label className="block text-sm mb-1">總名額</label><input type="number" required className="w-full border p-2 rounded" value={form.capacity} onChange={e=>setForm({...form, capacity: e.target.value})} /></div>
+
+                    <div className="bg-gray-50 p-3 rounded border space-y-2 mt-4">
+                      <h3 className="text-sm font-bold text-gray-700">各等級收費設定</h3>
+                      {[1,2,3,4,5].map(lvl => (
+                        <div key={lvl} className="flex items-center text-sm">
+                          <span className="w-16">Lv.{lvl}</span>
+                          <input type="number" required className="flex-1 border p-1 rounded px-2" value={form.prices[lvl]} onChange={e=>updatePrice(lvl, e.target.value)} />
+                        </div>
+                      ))}
+                    </div>
+
+                    <button type="submit" disabled={loading} className="w-full bg-slate-800 text-white p-2 rounded font-bold mt-2">上架時段</button>
+                  </form>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl shadow-sm border col-span-2">
+                  <h2 className="font-bold text-lg mb-4 border-b pb-2">近期預約名單 (含實收金額)</h2>
+                  <table className="w-full text-left text-sm">
+                    <thead><tr className="bg-gray-50 text-gray-600">
+                      <th className="p-3">時段 ID</th><th className="p-3">學生姓名</th><th className="p-3">實收金額</th>
+                    </tr></thead>
+                    <tbody>
+                      {bookings.map((b, idx) => (
+                        <tr key={idx} className="border-b">
+                          <td className="p-3 font-mono text-xs">{b.slotId}</td>
+                          <td className="p-3 font-bold">{b.name}</td>
+                          <td className="p-3 text-emerald-600 font-bold">NT$ {b.paidPrice}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
