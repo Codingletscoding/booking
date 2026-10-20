@@ -21,6 +21,7 @@
 
         const LEVEL_NAMES = { 1: '普通', 2: 'VIP', 3: 'VVIP', 4: 'SVVIP', 5: 'GVIP' };
 
+        // 工具：產生時間選項
         const generateTimeOptions = () => {
             const times = [];
             for (let h = 6; h <= 23; h++) {
@@ -30,6 +31,14 @@
             return times;
         };
         const timeOptions = generateTimeOptions();
+
+        // 工具：日期格式化 (YYYY-MM-DD)
+        const formatDate = (dateObj) => {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        };
 
         const getDayOfWeek = (dateString) => {
             if (!dateString) return '';
@@ -46,6 +55,22 @@
                 dates.push(`${nd.getMonth() + 1}/${nd.getDate()}`);
             }
             return `${dates.join(', ')} (${getDayOfWeek(startDateStr)})`;
+        };
+
+        // 判斷該課程是否落在選取的日期上 (包含單堂與月繳格式)
+        const doesSlotMatchDate = (slot, dateStr) => {
+            if (slot.date.startsWith(dateStr)) return true;
+            
+            // 解析月繳格式，例如 "11/4, 11/11 (週三)"
+            const d = new Date(dateStr);
+            const m = d.getMonth() + 1;
+            const day = d.getDate();
+            const md1 = `${m}/${day}`;
+            const md2 = `${String(m).padStart(2,'0')}/${String(day).padStart(2,'0')}`;
+            
+            // 拆解課程日期字串進行比對
+            const tokens = slot.date.split(/[\s,()]+/);
+            return tokens.includes(md1) || tokens.includes(md2);
         };
 
         const fetchAPI = async (payload) => {
@@ -72,7 +97,7 @@
                 });
               }
             }).catch(() => {
-              const mockProfile = { userId: 'U12345678', displayName: '測試用戶' };
+              const mockProfile = { userId: 'U12345678', displayName: '測試教練' };
               setLiffState({ init: true, profile: mockProfile });
               checkUser(mockProfile.userId);
             });
@@ -85,7 +110,7 @@
             else setView('register');
           };
 
-          if (view === 'loading') return <div className="p-10 text-center text-gray-500">載入中...</div>;
+          if (view === 'loading') return <div className="p-10 text-center text-gray-500">系統載入中...</div>;
           if (view === 'register') return <RegisterView profile={liffState.profile} onRegistered={(u) => { setUserRecord(u); setView('student'); }} />;
           if (view === 'student') return <StudentBookingView profile={liffState.profile} userRecord={userRecord} />;
           if (view === 'coach') return <CoachDashboard />;
@@ -116,10 +141,12 @@
           );
         };
 
-        // --- 學生：預約頁面 ---
+        // --- 學生：預約頁面 (日曆視圖) ---
         const StudentBookingView = ({ profile, userRecord }) => {
           const [slots, setSlots] = useState([]);
           const [status, setStatus] = useState('idle');
+          const [currentMonth, setCurrentMonth] = useState(new Date());
+          const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
           const userLevel = userRecord.level || 1;
 
           useEffect(() => {
@@ -134,60 +161,125 @@
             setStatus('success');
           };
 
+          // --- 產生行事曆資料 ---
+          const year = currentMonth.getFullYear();
+          const month = currentMonth.getMonth();
+          const firstDay = new Date(year, month, 1).getDay();
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          const blanks = Array.from({ length: firstDay }, () => null);
+          const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+          const allCells = [...blanks, ...days];
+
+          const nextMonth = () => setCurrentMonth(new Date(year, month + 1, 1));
+          const prevMonth = () => setCurrentMonth(new Date(year, month - 1, 1));
+
+          // 篩選出選取日期的課程
+          const dailySlots = slots.filter(s => doesSlotMatchDate(s, selectedDate) && s.remaining > 0);
+
           if (status === 'success') return (
             <div className="max-w-md mx-auto mt-10 p-8 text-center bg-white rounded-xl shadow-md">
               <h2 className="text-2xl font-bold text-emerald-600 mb-4">預約成功！</h2>
-              <button onClick={() => window.location.reload()} className="bg-gray-800 text-white px-6 py-2 rounded">返回列表</button>
+              <button onClick={() => window.location.reload()} className="bg-gray-800 text-white px-6 py-2 rounded">返回行事曆</button>
             </div>
           );
 
           return (
-            <div className="max-w-md mx-auto bg-white min-h-screen">
-              <div className="bg-slate-800 p-6 text-white flex justify-between items-center">
-                <div>
-                  <h1 className="text-xl font-bold">楽々羽球 預約系統</h1>
-                  <p className="text-sm text-slate-300 mt-1">{userRecord.name}，歡迎回來！</p>
-                  <div className="mt-2 inline-block bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded shadow-sm">
-                    {LEVEL_NAMES[userLevel]} 會員
-                  </div>
-                </div>
-                {profile.pictureUrl && <img src={profile.pictureUrl} className="w-12 h-12 rounded-full border-2 border-slate-600 shadow-md" />}
-              </div>
-              <div className="p-4 space-y-4">
-                {slots.filter(s => s.remaining > 0).map(slot => {
-                  const originalPrice = slot.prices[1]; // 普通級別的價錢當作原價
-                  const myPrice = slot.prices[userLevel]; // 學生的專屬價錢
-                  const isDiscounted = userLevel > 1 && myPrice < originalPrice; // 判斷是否享有特價
-
-                  return (
-                    <div key={slot.id} className="border p-4 rounded-xl flex flex-col hover:shadow-md transition bg-white">
-                      <div className="flex justify-between items-start">
-                        <div className="w-3/4">
-                          <div className="font-bold text-lg text-emerald-700">{slot.title}</div>
-                          <div className="font-semibold text-gray-800 mt-1 text-sm leading-relaxed">{slot.date}</div>
-                          <div className="text-sm text-gray-500 mt-1">{slot.time} • {slot.location}</div>
-                        </div>
-                        <button onClick={() => handleBook(slot)} disabled={status==='booking'} className="bg-emerald-100 text-emerald-700 font-bold py-2 px-5 rounded-lg hover:bg-emerald-200 transition-colors">預約</button>
-                      </div>
-                      
-                      {/* 價錢顯示區塊 */}
-                      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between w-full">
-                        <div className="flex items-baseline gap-2">
-                          {isDiscounted ? (
-                            <>
-                              <span className="text-emerald-600 font-bold text-lg">NT$ {myPrice}</span>
-                              <span className="text-gray-400 line-through text-sm">NT$ {originalPrice}</span>
-                              <span className="bg-red-50 text-red-600 border border-red-200 text-[10px] px-1.5 py-0.5 rounded font-bold">專屬特價</span>
-                            </>
-                          ) : (
-                            <span className="text-emerald-600 font-bold text-lg">NT$ {myPrice}</span>
-                          )}
-                        </div>
-                        <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">剩餘 {slot.remaining} 名</span>
-                      </div>
+            <div className="max-w-md mx-auto bg-gray-50 min-h-screen pb-10">
+              <div className="bg-slate-800 p-6 text-white">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-xl font-bold">楽々羽球 預約系統</h1>
+                    <p className="text-sm text-slate-300 mt-1">{userRecord.name}，歡迎！</p>
+                    <div className="mt-2 inline-block bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded shadow-sm">
+                      {LEVEL_NAMES[userLevel]} 會員
                     </div>
-                  );
-                })}
+                  </div>
+                  {profile.pictureUrl && <img src={profile.pictureUrl} className="w-12 h-12 rounded-full border-2 border-slate-600 shadow-md" />}
+                </div>
+              </div>
+
+              {/* 行事曆區塊 */}
+              <div className="bg-white px-4 py-4 shadow-sm border-b">
+                <div className="flex justify-between items-center mb-4 px-2">
+                    <button onClick={prevMonth} className="font-bold text-gray-500 hover:text-emerald-600 px-3 py-1 bg-gray-100 rounded">&lt;</button>
+                    <div className="font-bold text-lg text-gray-800">{year}年 {month + 1}月</div>
+                    <button onClick={nextMonth} className="font-bold text-gray-500 hover:text-emerald-600 px-3 py-1 bg-gray-100 rounded">&gt;</button>
+                </div>
+                <div className="grid grid-cols-7 text-center text-xs font-bold text-gray-400 mb-2">
+                    <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                </div>
+                <div className="grid grid-cols-7 text-center gap-y-2">
+                    {allCells.map((day, i) => {
+                      if (!day) return <div key={i} className="h-10"></div>;
+                      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                      
+                      // 檢查該日期是否有課
+                      const hasClass = slots.some(s => doesSlotMatchDate(s, dateStr) && s.remaining > 0);
+                      const isSelected = dateStr === selectedDate;
+                      const isToday = dateStr === formatDate(new Date());
+
+                      return (
+                        <div key={i} onClick={() => setSelectedDate(dateStr)} className="h-12 flex flex-col items-center justify-start cursor-pointer">
+                          <div className={`w-8 h-8 flex items-center justify-center rounded-full text-sm transition-colors ${isSelected ? 'bg-emerald-600 text-white font-bold shadow-md' : isToday ? 'bg-emerald-100 text-emerald-800 font-bold' : 'text-gray-700 hover:bg-gray-100'}`}>
+                            {day}
+                          </div>
+                          {/* 有課標示點 */}
+                          {hasClass && <div className="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1"></div>}
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+
+              {/* 課程列表區塊 */}
+              <div className="p-4">
+                <h3 className="font-bold text-gray-800 mb-3 ml-1">
+                    {new Date(selectedDate).getMonth() + 1}月{new Date(selectedDate).getDate()}日 ({getDayOfWeek(selectedDate)}) 可預約時段
+                </h3>
+                
+                {dailySlots.length === 0 ? (
+                    <div className="text-center text-gray-400 py-8 bg-white rounded-xl border border-dashed">本日無可預約的課程</div>
+                ) : (
+                    <div className="space-y-4">
+                        {dailySlots.map(slot => {
+                          const originalPrice = slot.prices[1]; 
+                          const myPrice = slot.prices[userLevel]; 
+                          const isDiscounted = userLevel > 1 && myPrice < originalPrice; 
+
+                          return (
+                            <div key={slot.id} className="border p-4 rounded-xl flex flex-col hover:shadow-md transition bg-white border-l-4 border-l-emerald-500 relative overflow-hidden">
+                              {/* 若為月繳課程，增加小提示標籤 */}
+                              {slot.title.includes('[月繳') && <div className="absolute top-0 right-0 bg-amber-100 text-amber-800 text-[10px] px-2 py-1 rounded-bl-lg font-bold">套裝課程</div>}
+                              
+                              <div className="flex justify-between items-start mt-1">
+                                <div className="w-3/4">
+                                  <div className="font-bold text-lg text-slate-800">{slot.title}</div>
+                                  <div className="text-sm text-gray-500 mt-1">{slot.time} • {slot.location}</div>
+                                  {/* 如果是月繳，顯示完整日期 */}
+                                  {slot.title.includes('[月繳') && <div className="text-xs text-emerald-600 mt-1 font-semibold">{slot.date}</div>}
+                                </div>
+                                <button onClick={() => handleBook(slot)} disabled={status==='booking'} className="bg-emerald-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-emerald-700 shadow-sm transition-colors">預約</button>
+                              </div>
+                              
+                              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between w-full">
+                                <div className="flex items-baseline gap-2">
+                                  {isDiscounted ? (
+                                    <>
+                                      <span className="text-emerald-600 font-bold text-lg">NT$ {myPrice}</span>
+                                      <span className="text-gray-400 line-through text-sm">NT$ {originalPrice}</span>
+                                      <span className="bg-red-50 text-red-600 border border-red-200 text-[10px] px-1.5 py-0.5 rounded font-bold">專屬特價</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-emerald-600 font-bold text-lg">NT$ {myPrice}</span>
+                                  )}
+                                </div>
+                                <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">剩餘 {slot.remaining} 名額</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                )}
               </div>
             </div>
           );
@@ -203,13 +295,24 @@
             startTime: '19:00',
             endTime: '21:00', 
             capacity: '6', 
-            // 預設以 300 換算好初始陣列
             prices: { 1: 300, 2: 294, 3: 285, 4: 270, 5: 264 } 
           });
           const [bookings, setBookings] = useState([]);
+          const [slots, setSlots] = useState([]); // 新增：用來存放已建立的課程
           const [loading, setLoading] = useState(false);
 
-          useEffect(() => { fetchAPI({ action: 'getCoachData' }).then(res => setBookings(res.bookings || [])); }, []);
+          const fetchData = () => {
+            // 同時抓取預約名單與課程清單
+            Promise.all([
+                fetchAPI({ action: 'getCoachData' }),
+                fetchAPI({ action: 'getSlots' })
+            ]).then(([bookRes, slotsRes]) => {
+                setBookings(bookRes.bookings || []);
+                setSlots(slotsRes.slots || []);
+            });
+          };
+
+          useEffect(() => { fetchData(); }, []);
 
           const handleAddSlot = async (e) => {
             e.preventDefault();
@@ -232,35 +335,34 @@
 
             alert('課程上架成功！');
             setForm({...form, date: ''}); 
+            fetchData(); // 上架後重新整理列表
             setLoading(false);
           };
 
-          // 自動算折扣的邏輯
           const updatePrice = (level, value) => {
             const val = parseInt(value, 10) || 0;
-            
-            // 如果輸入的是普通價 (Level 1)，自動換算其餘四個等級的價格 (四捨五入)
             if (Number(level) === 1) {
               setForm(prev => ({
                 ...prev,
                 prices: {
                   1: val,
-                  2: Math.round(val * 0.98), // VIP 98折
-                  3: Math.round(val * 0.95), // VVIP 95折
-                  4: Math.round(val * 0.90), // SVVIP 9折
-                  5: Math.round(val * 0.88)  // GVIP 88折
+                  2: Math.round(val * 0.98), 
+                  3: Math.round(val * 0.95), 
+                  4: Math.round(val * 0.90), 
+                  5: Math.round(val * 0.88)  
                 }
               }));
             } else {
-              // 若手動修改其他層級，則獨立更新該層級價錢
               setForm(prev => ({ ...prev, prices: { ...prev.prices, [level]: val }}));
             }
           };
 
           return (
-            <div className="max-w-4xl mx-auto p-6">
+            <div className="max-w-6xl mx-auto p-6">
               <h1 className="text-3xl font-bold text-slate-800 mb-8">教練管理後台</h1>
               <div className="grid md:grid-cols-3 gap-6">
+                
+                {/* 左側：新增表單 */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border col-span-1 h-fit">
                   <h2 className="font-bold text-lg mb-4 border-b pb-2">新增課程與分級定價</h2>
                   <form onSubmit={handleAddSlot} className="space-y-4">
@@ -271,12 +373,12 @@
                             <label className="flex items-center text-sm cursor-pointer">
                                 <input type="radio" name="mode" className="mr-1" 
                                     checked={form.mode === 'single'} 
-                                    onChange={() => setForm({...form, mode: 'single'})} /> 單堂課程
+                                    onChange={() => setForm({...form, mode: 'single'})} /> 單堂
                             </label>
                             <label className="flex items-center text-sm cursor-pointer">
                                 <input type="radio" name="mode" className="mr-1" 
                                     checked={form.mode === 'monthly'} 
-                                    onChange={() => setForm({...form, mode: 'monthly'})} /> 連續 4 週 (月繳)
+                                    onChange={() => setForm({...form, mode: 'monthly'})} /> 月繳(4週)
                             </label>
                         </div>
                     </div>
@@ -335,12 +437,7 @@
                     </div>
 
                     <div className="bg-gray-50 p-3 rounded border space-y-2 mt-4">
-                      <h3 className="text-sm font-bold text-gray-700">
-                        {form.mode === 'monthly' ? '各等級 4 堂總收費 (NT$)' : '各等級單堂收費 (NT$)'}
-                      </h3>
-                      <p className="text-[11px] text-emerald-600 bg-emerald-50 p-1.5 rounded mb-2">
-                        💡 只要修改「普通」價格，系統就會自動以 98折、95折、9折、88折 算出其他專屬優惠價。
-                      </p>
+                      <h3 className="text-sm font-bold text-gray-700">收費設定 (NT$)</h3>
                       {[1,2,3,4,5].map(lvl => (
                         <div key={lvl} className="flex items-center text-sm">
                           <span className="w-16 font-semibold text-gray-600">{LEVEL_NAMES[lvl]}</span>
@@ -353,28 +450,74 @@
                   </form>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border col-span-2">
-                  <h2 className="font-bold text-lg mb-4 border-b pb-2">近期預約名單 (含實收金額)</h2>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                      <thead><tr className="bg-gray-50 text-gray-600 border-b">
-                        <th className="p-3">時段 ID</th><th className="p-3">學生姓名</th><th className="p-3">實收金額</th>
-                      </tr></thead>
-                      <tbody>
-                        {bookings.length === 0 ? (
-                            <tr><td colSpan="3" className="p-4 text-center text-gray-400">目前尚無預約資料</td></tr>
-                        ) : (
-                            bookings.map((b, idx) => (
-                              <tr key={idx} className="border-b hover:bg-gray-50">
-                                <td className="p-3 font-mono text-xs text-gray-400">{b.slotId}</td>
-                                <td className="p-3 font-bold text-gray-800">{b.name}</td>
-                                <td className="p-3 text-emerald-600 font-bold">NT$ {b.paidPrice}</td>
-                              </tr>
-                            ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                {/* 右側：資料檢視區 */}
+                <div className="col-span-2 space-y-6">
+                    
+                    {/* 已開課總覽 */}
+                    <div className="bg-white p-6 rounded-xl shadow-sm border">
+                        <div className="flex justify-between items-center mb-4 border-b pb-2">
+                            <h2 className="font-bold text-lg text-emerald-700">所有已開課程 (狀態總覽)</h2>
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">共 {slots.length} 堂</span>
+                        </div>
+                        <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                          <table className="w-full text-left text-sm whitespace-nowrap">
+                            <thead className="sticky top-0 bg-white shadow-sm"><tr className="text-gray-600">
+                              <th className="p-3">課程名稱</th>
+                              <th className="p-3">日期 / 時間</th>
+                              <th className="p-3 text-center">預約進度 (已滿/總數)</th>
+                            </tr></thead>
+                            <tbody>
+                              {slots.length === 0 ? (
+                                  <tr><td colSpan="3" className="p-4 text-center text-gray-400">尚無開課紀錄</td></tr>
+                              ) : (
+                                  slots.map((s, idx) => {
+                                    const booked = s.capacity - s.remaining;
+                                    const isFull = booked === s.capacity;
+                                    return (
+                                      <tr key={idx} className="border-b hover:bg-gray-50">
+                                        <td className="p-3 font-bold text-gray-800">{s.title}</td>
+                                        <td className="p-3 text-gray-500">{s.date} <br/><span className="text-xs">{s.time}</span></td>
+                                        <td className="p-3 text-center">
+                                            <span className={`px-3 py-1 rounded-full font-bold text-xs ${isFull ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                {booked} / {s.capacity}
+                                            </span>
+                                        </td>
+                                      </tr>
+                                    )
+                                  })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                    </div>
+
+                    {/* 近期預約名單 */}
+                    <div className="bg-white p-6 rounded-xl shadow-sm border">
+                      <h2 className="font-bold text-lg mb-4 border-b pb-2 text-slate-800">最新學生預約名單</h2>
+                      <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                          <thead className="sticky top-0 bg-white shadow-sm"><tr className="text-gray-600">
+                            <th className="p-3">時段 ID</th>
+                            <th className="p-3">學生姓名</th>
+                            <th className="p-3">實收金額</th>
+                          </tr></thead>
+                          <tbody>
+                            {bookings.length === 0 ? (
+                                <tr><td colSpan="3" className="p-4 text-center text-gray-400">目前尚無預約資料</td></tr>
+                            ) : (
+                                bookings.slice().reverse().map((b, idx) => ( // 反轉陣列讓最新預約在最上面
+                                  <tr key={idx} className="border-b hover:bg-gray-50">
+                                    <td className="p-3 font-mono text-xs text-gray-400">{b.slotId}</td>
+                                    <td className="p-3 font-bold text-gray-800">{b.name}</td>
+                                    <td className="p-3 text-emerald-600 font-bold">NT$ {b.paidPrice}</td>
+                                  </tr>
+                                ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
                 </div>
               </div>
             </div>
