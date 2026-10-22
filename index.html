@@ -20,6 +20,15 @@
         const LIFF_ID = '2012115245-A7HBSYsv';
 
         const LEVEL_NAMES = { 1: '普通', 2: 'VIP', 3: 'VVIP', 4: 'SVVIP', 5: 'GVIP' };
+        
+        // 訓練項目清單
+        const SKILL_KEYS = [
+            { key: 'clears', label: '高遠球' }, { key: 'drives', label: '平抽' },
+            { key: 'lifts', label: '挑球' }, { key: 'drops', label: '切球' },
+            { key: 'net', label: '網前小球' }, { key: 'pushes', label: '撲球' },
+            { key: 'smashes', label: '殺球' }, { key: 'defense', label: '防守技術' },
+            { key: 'combo', label: '組合訓練' }
+        ];
 
         const getVIPDiscount = (lvl) => {
             const l = Number(lvl);
@@ -59,37 +68,28 @@
             const year = d.getFullYear();
             const month = d.getMonth();
             const targetDayOfWeek = d.getDay(); 
-
             const dates = [];
             for (let day = 1; day <= 31; day++) {
                 const tempDate = new Date(year, month, day);
                 if (tempDate.getMonth() !== month) break; 
-                if (tempDate.getDay() === targetDayOfWeek) {
-                    dates.push(`${tempDate.getMonth() + 1}/${tempDate.getDate()}`);
-                }
+                if (tempDate.getDay() === targetDayOfWeek) dates.push(`${tempDate.getMonth() + 1}/${tempDate.getDate()}`);
             }
-            return {
-                text: `${dates.join(', ')} (${getDayOfWeek(startDateStr)})`,
-                count: dates.length 
-            };
+            return { text: `${dates.join(', ')} (${getDayOfWeek(startDateStr)})`, count: dates.length };
         };
 
         const doesSlotMatchDate = (slot, dateStr) => {
             if (!slot || !slot.date) return false;
             const sDate = String(slot.date);
-            
             if (sDate.includes(dateStr)) return true;
             if (sDate.includes('T') && sDate.includes('Z')) {
                 const dObj = new Date(sDate);
                 if (formatDate(dObj) === dateStr) return true;
             }
-            
             const target = new Date(dateStr);
             const m = target.getMonth() + 1;
             const d = target.getDate();
             const reg = new RegExp(`(^|[^\\d/])(0?${m}/0?${d})([^\\d/]|$)`);
             if (reg.test(sDate)) return true;
-            
             return false;
         };
 
@@ -100,6 +100,35 @@
             body: JSON.stringify(payload)
           });
           return res.json();
+        };
+
+        // --- 元件：圓形儀表板 ---
+        const CircleProgress = ({ label, value }) => {
+            const max = 20; // 滿圈的時數基準 (可視需求調整)
+            const radius = 32;
+            const circumference = 2 * Math.PI * radius;
+            const safeValue = Math.min(value, max);
+            const strokeDashoffset = circumference - (safeValue / max) * circumference;
+            
+            return (
+                <div className="flex flex-col items-center justify-center p-2">
+                    <div className="relative flex items-center justify-center">
+                        <svg className="w-20 h-20 transform -rotate-90">
+                            <circle cx="40" cy="40" r="32" stroke="#e2e8f0" strokeWidth="6" fill="transparent" />
+                            <circle cx="40" cy="40" r="32" stroke="#10b981" strokeWidth="6" fill="transparent" 
+                                strokeDasharray={circumference} 
+                                strokeDashoffset={strokeDashoffset} 
+                                className="transition-all duration-1000 ease-out" 
+                            />
+                        </svg>
+                        <div className="absolute flex flex-col items-center justify-center">
+                            <span className="text-sm font-bold text-slate-700">{value}</span>
+                            <span className="text-[9px] text-slate-400">時數</span>
+                        </div>
+                    </div>
+                    <span className="text-xs mt-2 font-bold text-slate-600">{label}</span>
+                </div>
+            );
         };
 
         const App = () => {
@@ -132,7 +161,7 @@
 
           if (view === 'loading') return <div className="p-10 text-center text-gray-500">系統載入中...</div>;
           if (view === 'register') return <RegisterView profile={liffState.profile} onRegistered={(u) => { setUserRecord(u); setView('student'); }} />;
-          if (view === 'student') return <StudentBookingView profile={liffState.profile} userRecord={userRecord} />;
+          if (view === 'student') return <StudentDashboard profile={liffState.profile} userRecord={userRecord} />;
           if (view === 'coach') return <CoachDashboard />;
         };
 
@@ -150,18 +179,50 @@
 
           return (
             <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-xl shadow-md">
-              <h2 className="text-2xl font-bold mb-2">哈囉！首次登入請綁定資料</h2>
+              <h2 className="text-2xl font-bold mb-2">首次登入請綁定資料</h2>
               <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                 <div><label className="block text-sm mb-1">真實姓名</label><input required className="w-full border p-2 rounded" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} /></div>
                 <div><label className="block text-sm mb-1">年齡</label><input required type="number" className="w-full border p-2 rounded" value={form.age} onChange={e=>setForm({...form, age: e.target.value})} /></div>
                 <div><label className="block text-sm mb-1">聯絡電話</label><input required type="tel" className="w-full border p-2 rounded" value={form.phone} onChange={e=>setForm({...form, phone: e.target.value})} /></div>
-                <button type="submit" disabled={submitting} className="w-full bg-emerald-600 text-white p-3 rounded-lg font-bold">{submitting ? '綁定中...' : '確認綁定'}</button>
+                <button type="submit" disabled={submitting} className="w-full bg-emerald-600 text-white p-3 rounded-lg font-bold">{submitting ? '處理中...' : '確認綁定'}</button>
               </form>
             </div>
           );
         };
 
-        // --- 學生：預約頁面 ---
+        // --- 學生：雙頁籤總成 ---
+        const StudentDashboard = ({ profile, userRecord }) => {
+            const [activeTab, setActiveTab] = useState('booking'); // 'booking' 或 'records'
+            const userLevel = userRecord.level || 1;
+
+            return (
+                <div className="max-w-md mx-auto bg-gray-50 min-h-screen flex flex-col">
+                    <div className="bg-slate-800 p-6 pb-2 text-white shadow-md relative z-10">
+                        <div className="flex justify-between items-center mb-4">
+                            <div>
+                                <h1 className="text-xl font-bold">楽動羽球</h1>
+                                <p className="text-sm text-slate-300 mt-1">{userRecord.name}，歡迎！</p>
+                                <div className="mt-2 inline-block bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded shadow-sm">
+                                    {LEVEL_NAMES[userLevel]} 會員
+                                </div>
+                            </div>
+                            {profile.pictureUrl && <img src={profile.pictureUrl} className="w-12 h-12 rounded-full border-2 border-slate-600 shadow-md" />}
+                        </div>
+                        {/* 學生切換頁籤 */}
+                        <div className="flex w-full mt-2 border-b border-slate-600">
+                            <button onClick={()=>setActiveTab('booking')} className={`flex-1 py-3 text-sm font-bold text-center border-b-4 transition-colors ${activeTab === 'booking' ? 'border-emerald-400 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>課程預約</button>
+                            <button onClick={()=>setActiveTab('records')} className={`flex-1 py-3 text-sm font-bold text-center border-b-4 transition-colors ${activeTab === 'records' ? 'border-emerald-400 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>我的訓練紀錄</button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1">
+                        {activeTab === 'booking' ? <StudentBookingView profile={profile} userRecord={userRecord} /> : <StudentRecordsView lineId={profile.userId} />}
+                    </div>
+                </div>
+            )
+        };
+
+        // --- 學生功能 1：課程預約 ---
         const StudentBookingView = ({ profile, userRecord }) => {
           const [slots, setSlots] = useState([]);
           const [status, setStatus] = useState('idle');
@@ -181,15 +242,12 @@
             const myPrice = customPrice || slot.prices[userLevel];
             let titleDisplay = slot.title;
             let finalName = userRecord.name;
-            
             if (type) {
                 titleDisplay = `教練專屬時段 (${type} 於 ${selectedLoc})`;
                 finalName = `${userRecord.name} [${type} - ${selectedLoc}]`;
             }
-            
             if (!confirm(`確定預約 ${titleDisplay}？\n時間：${slot.date} ${slot.time}\n專屬費用：NT$ ${myPrice}`)) return;
             setStatus('booking');
-            
             await fetchAPI({ action: 'bookClass', slotId: slot.id, lineId: profile.userId, name: finalName, paidPrice: myPrice });
             setStatus('success');
           };
@@ -206,28 +264,14 @@
           const dailySlots = slots.filter(s => doesSlotMatchDate(s, selectedDate));
 
           if (status === 'success') return (
-            <div className="max-w-md mx-auto mt-10 p-8 text-center bg-white rounded-xl shadow-md">
+            <div className="p-8 text-center bg-white rounded-xl shadow-md m-4 border-t-4 border-emerald-500">
               <h2 className="text-2xl font-bold text-emerald-600 mb-4">預約成功！</h2>
-              <button onClick={() => window.location.reload()} className="bg-gray-800 text-white px-6 py-2 rounded">返回行事曆</button>
+              <button onClick={() => window.location.reload()} className="w-full bg-slate-800 text-white py-3 rounded-lg font-bold">繼續預約</button>
             </div>
           );
 
           return (
-            <div className="max-w-md mx-auto bg-gray-50 min-h-screen pb-10">
-              <div className="bg-slate-800 p-6 text-white">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h1 className="text-xl font-bold">楽動羽球 預約系統</h1>
-                    <p className="text-sm text-slate-300 mt-1">{userRecord.name}，歡迎！</p>
-                    <div className="mt-2 inline-block bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded shadow-sm">
-                      {LEVEL_NAMES[userLevel]} 會員
-                    </div>
-                  </div>
-                  {profile.pictureUrl && <img src={profile.pictureUrl} className="w-12 h-12 rounded-full border-2 border-slate-600 shadow-md" />}
-                </div>
-              </div>
-
-              {/* 行事曆區塊 */}
+            <div className="pb-10">
               <div className="bg-white px-4 py-4 shadow-sm border-b">
                 <div className="flex justify-between items-center mb-4 px-2">
                     <button onClick={prevMonth} className="font-bold text-gray-500 hover:text-emerald-600 px-3 py-1 bg-gray-100 rounded">&lt;</button>
@@ -270,12 +314,8 @@
                 </div>
               </div>
 
-              {/* 課程列表區塊 */}
               <div className="p-4">
-                <h3 className="font-bold text-gray-800 mb-3 ml-1">
-                    {new Date(selectedDate).getMonth() + 1}月{new Date(selectedDate).getDate()}日 ({getDayOfWeek(selectedDate)}) 可預約時段
-                </h3>
-                
+                <h3 className="font-bold text-gray-800 mb-3 ml-1">可預約時段</h3>
                 {dailySlots.length === 0 ? (
                     <div className="text-center text-gray-400 py-8 bg-white rounded-xl border border-dashed">本日無排定課程</div>
                 ) : (
@@ -291,7 +331,6 @@
                               const discount = getVIPDiscount(userLevel);
                               const my1v1 = Math.round(base1v1 * discount);
                               const my1v2 = Math.round(base1v2 * discount);
-                              
                               const selectedLoc = studentLocations[slot.id] || '關聖里活動中心';
 
                               return (
@@ -303,15 +342,10 @@
                                     
                                     {!isFull && (
                                       <div className="mt-3">
-                                          <div className="text-xs text-red-600 bg-red-50 px-2 py-1.5 rounded border border-red-100 mb-2 leading-relaxed font-medium">
-                                            ⚠️ 教練費 <strong>不含場地費用</strong>，請自行預約場地後，於下方選擇您的上課地點。
+                                          <div className="text-xs text-red-600 bg-red-50 px-2 py-1.5 rounded border border-red-100 mb-2 font-medium">
+                                            ⚠️ 教練費 <strong>不含場地費用</strong>，請於下方選擇預約地點。
                                           </div>
-                                          <label className="block text-xs font-bold text-green-800 mb-1">您預約的場地地點</label>
-                                          <select 
-                                              className="w-full border border-green-200 p-2 rounded bg-white text-sm outline-none shadow-sm"
-                                              value={selectedLoc}
-                                              onChange={(e) => setStudentLocations(prev => ({...prev, [slot.id]: e.target.value}))}
-                                          >
+                                          <select className="w-full border border-green-200 p-2 rounded bg-white text-sm outline-none shadow-sm" value={selectedLoc} onChange={(e) => setStudentLocations(prev => ({...prev, [slot.id]: e.target.value}))}>
                                               <option value="關聖里活動中心">關聖里活動中心</option>
                                               <option value="永康嘉世">永康嘉世</option>
                                               <option value="仁德羽潮">仁德羽潮</option>
@@ -325,33 +359,22 @@
                                         <div className={`flex justify-between items-center p-2.5 rounded border shadow-sm ${isFull ? 'bg-gray-100 border-gray-200' : 'bg-white border-green-100'}`}>
                                             <div className={isFull ? 'opacity-60' : ''}>
                                                 <span className={`font-bold text-sm ${isFull ? 'text-gray-500' : 'text-green-700'}`}>1對1 教練課</span>
-                                                <div className="mt-0.5">
-                                                    <span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold`}>NT$ {my1v1}</span>
-                                                    {Number(userLevel) > 1 && <span className="text-gray-400 line-through text-xs ml-2">NT$ {base1v1}</span>}
-                                                </div>
+                                                <div className="mt-0.5"><span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold`}>NT$ {my1v1}</span></div>
                                             </div>
-                                            <button onClick={() => handleBook(slot, '1對1', my1v1, selectedLoc)} disabled={status==='booking' || isFull} className={`font-bold py-1.5 px-4 rounded-lg text-sm transition-colors ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>
-                                                {isFull ? '已額滿' : '預約 1對1'}
-                                            </button>
+                                            <button onClick={() => handleBook(slot, '1對1', my1v1, selectedLoc)} disabled={status==='booking' || isFull} className={`font-bold py-1.5 px-4 rounded-lg text-sm ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>{isFull ? '已額滿' : '預約 1對1'}</button>
                                         </div>
                                         <div className={`flex justify-between items-center p-2.5 rounded border shadow-sm ${isFull ? 'bg-gray-100 border-gray-200' : 'bg-white border-green-100'}`}>
                                             <div className={isFull ? 'opacity-60' : ''}>
                                                 <span className={`font-bold text-sm ${isFull ? 'text-gray-500' : 'text-green-700'}`}>1對2 教練課</span>
-                                                <div className="mt-0.5">
-                                                    <span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold`}>NT$ {my1v2}</span>
-                                                    {Number(userLevel) > 1 && <span className="text-gray-400 line-through text-xs ml-2">NT$ {base1v2}</span>}
-                                                </div>
+                                                <div className="mt-0.5"><span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold`}>NT$ {my1v2}</span></div>
                                             </div>
-                                            <button onClick={() => handleBook(slot, '1對2', my1v2, selectedLoc)} disabled={status==='booking' || isFull} className={`font-bold py-1.5 px-4 rounded-lg text-sm transition-colors ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>
-                                                {isFull ? '已額滿' : '預約 1對2'}
-                                            </button>
+                                            <button onClick={() => handleBook(slot, '1對2', my1v2, selectedLoc)} disabled={status==='booking' || isFull} className={`font-bold py-1.5 px-4 rounded-lg text-sm ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>{isFull ? '已額滿' : '預約 1對2'}</button>
                                         </div>
                                     </div>
                                 </div>
                               );
                           }
 
-                          // 一般團課
                           const originalPrice = slot.prices[1]; 
                           const myPrice = slot.prices[userLevel]; 
                           const isDiscounted = userLevel > 1 && myPrice < originalPrice; 
@@ -359,33 +382,20 @@
                           return (
                             <div key={slot.id} className={`border p-4 rounded-xl flex flex-col shadow-sm transition relative overflow-hidden ${isFull ? 'bg-gray-50 border-l-4 border-l-gray-400 opacity-80' : 'bg-white border-l-4 border-l-blue-500 hover:shadow-md'}`}>
                               {slot.title.includes('[月繳') && <div className={`absolute top-0 right-0 text-[10px] px-2 py-1 rounded-bl-lg font-bold ${isFull ? 'bg-gray-200 text-gray-600' : 'bg-amber-100 text-amber-800'}`}>套裝課程</div>}
-                              
                               <div className="flex justify-between items-start mt-1">
                                 <div className={`w-3/4 ${isFull ? 'opacity-60' : ''}`}>
                                   <div className={`font-bold text-lg ${isFull ? 'text-gray-500' : 'text-blue-700'}`}>{slot.title}</div>
-                                  <div className="font-semibold text-gray-800 mt-1 text-sm leading-relaxed">{slot.date}</div>
+                                  <div className="font-semibold text-gray-800 mt-1 text-sm">{slot.date}</div>
                                   <div className="text-sm text-gray-500 mt-1">{slot.time} • {slot.location}</div>
                                 </div>
-                                <button onClick={() => handleBook(slot)} disabled={status==='booking' || isFull} className={`font-bold py-2 px-5 rounded-lg shadow-sm transition-colors ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-                                    {isFull ? '已額滿' : '預約'}
-                                </button>
+                                <button onClick={() => handleBook(slot)} disabled={status==='booking' || isFull} className={`font-bold py-2 px-5 rounded-lg shadow-sm transition-colors ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>{isFull ? '已額滿' : '預約'}</button>
                               </div>
-                              
                               <div className={`mt-3 pt-3 border-t flex items-center justify-between w-full ${isFull ? 'border-gray-200 opacity-60' : 'border-gray-100'}`}>
                                 <div className="flex items-baseline gap-2">
-                                  {isDiscounted ? (
-                                    <>
-                                      <span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold text-lg`}>NT$ {myPrice}</span>
-                                      <span className="text-gray-400 line-through text-sm">NT$ {originalPrice}</span>
-                                      {!isFull && <span className="bg-red-50 text-red-600 border border-red-200 text-[10px] px-1.5 py-0.5 rounded font-bold">專屬特價</span>}
-                                    </>
-                                  ) : (
-                                    <span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold text-lg`}>NT$ {myPrice}</span>
-                                  )}
+                                  <span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold text-lg`}>NT$ {myPrice}</span>
+                                  {isDiscounted && <span className="bg-red-50 text-red-600 border border-red-200 text-[10px] px-1.5 py-0.5 rounded font-bold">特價</span>}
                                 </div>
-                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${isFull ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
-                                    {isFull ? '已滿班' : `剩餘 ${slot.remaining} 名額`}
-                                </span>
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${isFull ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>{isFull ? '已滿班' : `剩 ${slot.remaining} 名`}</span>
                               </div>
                             </div>
                           );
@@ -397,19 +407,83 @@
           );
         };
 
-        // --- 教練：後台管理 ---
+        // --- 學生功能 2：我的訓練紀錄 (儀表板) ---
+        const StudentRecordsView = ({ lineId }) => {
+            const [data, setData] = useState(null);
+
+            useEffect(() => {
+                fetchAPI({ action: 'getStudentStats', lineId }).then(res => setData(res));
+            }, []);
+
+            if (!data) return <div className="p-10 text-center text-gray-400">讀取資料中...</div>;
+
+            return (
+                <div className="p-4 space-y-6 pb-10">
+                    <div className="bg-white rounded-xl shadow-sm border p-6 text-center border-t-4 border-t-amber-400">
+                        <div className="text-sm text-gray-500 font-bold mb-1">累積參與課程</div>
+                        <div className="text-4xl font-extrabold text-slate-800">{data.totalClasses} <span className="text-base text-gray-500 font-normal">堂</span></div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border p-4">
+                        <h3 className="font-bold text-slate-800 mb-4 ml-1 flex items-center">
+                            <span className="w-2 h-6 bg-emerald-500 rounded mr-2"></span>能力時數雷達
+                        </h3>
+                        <div className="grid grid-cols-3 gap-2">
+                            {SKILL_KEYS.map(skill => (
+                                <CircleProgress key={skill.key} label={skill.label} value={data.stats[skill.key]} />
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border p-4">
+                        <h3 className="font-bold text-slate-800 mb-4 ml-1 flex items-center">
+                            <span className="w-2 h-6 bg-blue-500 rounded mr-2"></span>近期訓練日誌
+                        </h3>
+                        <div className="space-y-4">
+                            {data.logs.length === 0 ? (
+                                <div className="text-center text-gray-400 text-sm py-4">教練尚未填寫您的日誌</div>
+                            ) : (
+                                data.logs.map((log, i) => (
+                                    <div key={i} className="border-b border-dashed pb-3 last:border-0 last:pb-0">
+                                        <div className="text-xs font-bold text-emerald-600 mb-1">{log.date}</div>
+                                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{log.note || '本次無特別備註'}</p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+
+        // --- 教練：雙頁籤總成 ---
         const CoachDashboard = () => {
+            const [activeTab, setActiveTab] = useState('slots'); // 'slots' 或 'members'
+            
+            return (
+                <div className="max-w-6xl mx-auto min-h-screen flex flex-col bg-gray-50">
+                    <div className="bg-slate-800 p-6 pb-0 text-white shadow-md relative z-10">
+                        <h1 className="text-2xl font-bold mb-4">教練管理後台</h1>
+                        <div className="flex w-full mt-2">
+                            <button onClick={()=>setActiveTab('slots')} className={`px-6 py-3 text-sm font-bold border-b-4 transition-colors ${activeTab === 'slots' ? 'border-emerald-400 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>排課與預約管理</button>
+                            <button onClick={()=>setActiveTab('members')} className={`px-6 py-3 text-sm font-bold border-b-4 transition-colors ${activeTab === 'members' ? 'border-emerald-400 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>學員名單與日誌</button>
+                        </div>
+                    </div>
+                    <div className="flex-1 p-6">
+                        {activeTab === 'slots' ? <CoachSlotsView /> : <CoachMembersView />}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 教練功能 1：排課管理 ---
+        const CoachSlotsView = () => {
           const [form, setForm] = useState({ 
-            mode: 'single', 
-            title: '新手團課',
-            location: '關聖里活動中心',
-            date: '', 
-            startTime: '19:00',
-            endTime: '21:00', 
-            capacity: '6', 
+            mode: 'single', title: '新手團課', location: '關聖里活動中心',
+            date: '', startTime: '19:00', endTime: '21:00', capacity: '6', 
             prices: { 1: 300, 2: 294, 3: 285, 4: 270, 5: 264 },
-            coachBase1v1: '1000',
-            coachBase1v2: '1500'
+            coachBase1v1: '1000', coachBase1v2: '1500'
           });
           const [bookings, setBookings] = useState([]);
           const [slots, setSlots] = useState([]);
@@ -418,13 +492,9 @@
           const monthlyInfo = getMonthlyDatesInfo(form.date);
 
           const fetchData = () => {
-            Promise.all([
-                fetchAPI({ action: 'getCoachData' }),
-                fetchAPI({ action: 'getSlots' })
-            ]).then(([bookRes, slotsRes]) => {
-                setBookings(bookRes.bookings || []);
-                const validSlots = (slotsRes.slots || []).filter(s => s.id && s.title && s.date);
-                setSlots(validSlots);
+            Promise.all([fetchAPI({ action: 'getCoachData' }), fetchAPI({ action: 'getSlots' })]).then(([bRes, sRes]) => {
+                setBookings(bRes.bookings || []);
+                setSlots((sRes.slots || []).filter(s => s.id && s.title && s.date));
             });
           };
 
@@ -433,277 +503,270 @@
           const handleAddSlot = async (e) => {
             e.preventDefault();
             setLoading(true);
-            
-            let finalTitle = form.title;
-            let finalCapacity = form.capacity;
-            let finalLocation = form.location;
-
-            if (form.mode === 'monthly') {
-                finalTitle = `[月繳${monthlyInfo.count}堂] ${form.title}`;
-            } else if (form.mode === 'coach') {
+            let finalTitle = form.title, finalCapacity = form.capacity, finalLocation = form.location;
+            if (form.mode === 'monthly') finalTitle = `[月繳${monthlyInfo.count}堂] ${form.title}`;
+            else if (form.mode === 'coach') {
                 finalTitle = `[專屬教練課] 1v1:${form.coachBase1v1}|1v2:${form.coachBase1v2}`;
-                finalCapacity = 1; 
-                finalLocation = '學員自理 (不含場地費)'; 
+                finalCapacity = 1; finalLocation = '學員自理 (不含場地費)'; 
             }
-
-            const finalDate = form.mode === 'monthly' 
-                ? monthlyInfo.text 
-                : `${form.date} (${getDayOfWeek(form.date)})`;
-            
-            const formattedTime = `${form.startTime} - ${form.endTime}`;
-
-            await fetchAPI({ 
-                action: 'addSlot', 
-                ...form, 
-                capacity: finalCapacity,
-                location: finalLocation,
-                title: finalTitle,
-                date: finalDate, 
-                time: formattedTime 
-            });
-
+            const finalDate = form.mode === 'monthly' ? monthlyInfo.text : `${form.date} (${getDayOfWeek(form.date)})`;
+            await fetchAPI({ action: 'addSlot', ...form, capacity: finalCapacity, location: finalLocation, title: finalTitle, date: finalDate, time: `${form.startTime} - ${form.endTime}` });
             alert('課程上架成功！');
             setForm({...form, date: ''}); 
-            fetchData();
-            setLoading(false);
+            fetchData(); setLoading(false);
           };
 
           const updatePrice = (level, value) => {
             const val = parseInt(value, 10) || 0;
             if (Number(level) === 1) {
-              setForm(prev => ({
-                ...prev,
-                prices: {
-                  1: val,
-                  2: Math.round(val * getVIPDiscount(2)), 
-                  3: Math.round(val * getVIPDiscount(3)), 
-                  4: Math.round(val * getVIPDiscount(4)), 
-                  5: Math.round(val * getVIPDiscount(5))  
-                }
-              }));
-            } else {
-              setForm(prev => ({ ...prev, prices: { ...prev.prices, [level]: val }}));
-            }
+              setForm(prev => ({...prev, prices: { 1: val, 2: Math.round(val*getVIPDiscount(2)), 3: Math.round(val*getVIPDiscount(3)), 4: Math.round(val*getVIPDiscount(4)), 5: Math.round(val*getVIPDiscount(5)) }}));
+            } else setForm(prev => ({ ...prev, prices: { ...prev.prices, [level]: val }}));
           };
 
-          // 【新增】刪除課程功能
           const handleDeleteSlot = async (slotId, title, dateStr) => {
-            if (!confirm(`確定要刪除這堂課嗎？\n\n${title} (${dateStr})\n\n⚠️ 注意：此操作無法復原，也會讓已經預約的學生找不到該課程資訊。`)) return;
+            if (!confirm(`確定要刪除這堂課嗎？\n\n${title} (${dateStr})\n\n⚠️ 此操作無法復原。`)) return;
             setLoading(true);
             await fetchAPI({ action: 'deleteSlot', slotId: slotId });
-            fetchData(); // 重新讀取資料
-            setLoading(false);
+            fetchData(); setLoading(false);
           };
 
           return (
-            <div className="max-w-6xl mx-auto p-6">
-              <h1 className="text-3xl font-bold text-slate-800 mb-8">教練管理後台</h1>
               <div className="grid md:grid-cols-3 gap-6">
-                
-                {/* 左側：新增表單 */}
+                {/* 新增表單 */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border col-span-1 h-fit">
                   <h2 className="font-bold text-lg mb-4 border-b pb-2">新增課程 / 開放時段</h2>
                   <form onSubmit={handleAddSlot} className="space-y-4">
-                    
                     <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
                         <label className="block text-sm mb-2 font-bold text-emerald-800">上架類型</label>
                         <div className="flex flex-col gap-2">
-                            <label className="flex items-center text-sm cursor-pointer hover:bg-emerald-100 p-1 rounded transition">
-                                <input type="radio" name="mode" className="mr-2" 
-                                    checked={form.mode === 'single'} 
-                                    onChange={() => setForm({...form, mode: 'single'})} /> 單堂團課
-                            </label>
-                            <label className="flex items-center text-sm cursor-pointer hover:bg-emerald-100 p-1 rounded transition">
-                                <input type="radio" name="mode" className="mr-2" 
-                                    checked={form.mode === 'monthly'} 
-                                    onChange={() => setForm({...form, mode: 'monthly'})} /> 月繳團課 (依當月週數)
-                            </label>
-                            <label className="flex items-center text-sm cursor-pointer hover:bg-emerald-100 p-1 rounded transition">
-                                <input type="radio" name="mode" className="mr-2" 
-                                    checked={form.mode === 'coach'} 
-                                    onChange={() => setForm({...form, mode: 'coach'})} /> 開放教練時段 (1對1/1對2)
-                            </label>
+                            <label className="flex items-center text-sm cursor-pointer hover:bg-emerald-100 p-1 rounded transition"><input type="radio" name="mode" className="mr-2" checked={form.mode === 'single'} onChange={() => setForm({...form, mode: 'single'})} /> 單堂團課</label>
+                            <label className="flex items-center text-sm cursor-pointer hover:bg-emerald-100 p-1 rounded transition"><input type="radio" name="mode" className="mr-2" checked={form.mode === 'monthly'} onChange={() => setForm({...form, mode: 'monthly'})} /> 月繳團課</label>
+                            <label className="flex items-center text-sm cursor-pointer hover:bg-emerald-100 p-1 rounded transition"><input type="radio" name="mode" className="mr-2" checked={form.mode === 'coach'} onChange={() => setForm({...form, mode: 'coach'})} /> 教練時段</label>
                         </div>
                     </div>
 
                     {form.mode !== 'coach' && (
                         <>
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-700">課程名稱</label>
-                                <select className="w-full border p-2 rounded bg-white outline-none" value={form.title} onChange={e=>setForm({...form, title: e.target.value})}>
-                                    <option value="新手團課">新手團課</option>
-                                    <option value="初階團課">初階團課</option>
-                                    <option value="兒童團課">兒童團課</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-700">地點</label>
-                                <select className="w-full border p-2 rounded bg-white outline-none" value={form.location} onChange={e=>setForm({...form, location: e.target.value})}>
-                                    <option value="關聖里活動中心">關聖里活動中心</option>
-                                    <option value="永康嘉世">永康嘉世</option>
-                                    <option value="仁德羽潮">仁德羽潮</option>
-                                    <option value="南區羽潮">南區羽潮</option>
-                                </select>
-                            </div>
+                            <div><label className="block text-sm mb-1 text-gray-700">課程名稱</label><select className="w-full border p-2 rounded bg-white outline-none" value={form.title} onChange={e=>setForm({...form, title: e.target.value})}><option value="新手團課">新手團課</option><option value="初階團課">初階團課</option><option value="兒童團課">兒童團課</option></select></div>
+                            <div><label className="block text-sm mb-1 text-gray-700">地點</label><select className="w-full border p-2 rounded bg-white outline-none" value={form.location} onChange={e=>setForm({...form, location: e.target.value})}><option value="關聖里活動中心">關聖里活動中心</option><option value="永康嘉世">永康嘉世</option><option value="仁德羽潮">仁德羽潮</option><option value="南區羽潮">南區羽潮</option></select></div>
                         </>
                     )}
                     
                     <div>
-                        <label className="block text-sm mb-1 text-gray-700">
-                            {form.mode === 'monthly' ? '選擇當月任一上課日' : '開放日期'}
-                        </label>
+                        <label className="block text-sm mb-1 text-gray-700">{form.mode === 'monthly' ? '選擇當月任一上課日' : '開放日期'}</label>
                         <input type="date" required className="w-full border p-2 rounded" value={form.date} onChange={e=>setForm({...form, date: e.target.value})} />
-                        {form.mode === 'monthly' && form.date && (
-                            <div className="mt-2 text-xs text-emerald-600 bg-emerald-50 p-2 rounded">
-                                將自動建立：{monthlyInfo.text} (共 {monthlyInfo.count} 堂)
-                            </div>
-                        )}
+                        {form.mode === 'monthly' && form.date && <div className="mt-2 text-xs text-emerald-600 bg-emerald-50 p-2 rounded">將自動建立：{monthlyInfo.text} (共 {monthlyInfo.count} 堂)</div>}
                     </div>
 
                     <div className="flex gap-2 items-center">
-                        <div className="flex-1">
-                            <label className="block text-sm mb-1 text-gray-700">開始時間</label>
-                            <select className="w-full border p-2 rounded bg-white" value={form.startTime} onChange={e=>setForm({...form, startTime: e.target.value})}>
-                                {timeOptions.map(t => <option key={`start-${t}`} value={t}>{t}</option>)}
-                            </select>
-                        </div>
+                        <div className="flex-1"><label className="block text-sm mb-1 text-gray-700">開始時間</label><select className="w-full border p-2 rounded bg-white" value={form.startTime} onChange={e=>setForm({...form, startTime: e.target.value})}>{timeOptions.map(t => <option key={`start-${t}`} value={t}>{t}</option>)}</select></div>
                         <span className="pt-5 text-gray-400">至</span>
-                        <div className="flex-1">
-                            <label className="block text-sm mb-1 text-gray-700">結束時間</label>
-                            <select className="w-full border p-2 rounded bg-white" value={form.endTime} onChange={e=>setForm({...form, endTime: e.target.value})}>
-                                {timeOptions.map(t => <option key={`end-${t}`} value={t}>{t}</option>)}
-                            </select>
-                        </div>
+                        <div className="flex-1"><label className="block text-sm mb-1 text-gray-700">結束時間</label><select className="w-full border p-2 rounded bg-white" value={form.endTime} onChange={e=>setForm({...form, endTime: e.target.value})}>{timeOptions.map(t => <option key={`end-${t}`} value={t}>{t}</option>)}</select></div>
                     </div>
 
                     {form.mode !== 'coach' ? (
                         <>
-                            <div>
-                                <label className="block text-sm mb-1 text-gray-700">總名額</label>
-                                <input type="number" required min="1" className="w-full border p-2 rounded" value={form.capacity} onChange={e=>setForm({...form, capacity: e.target.value})} />
-                            </div>
-
+                            <div><label className="block text-sm mb-1 text-gray-700">總名額</label><input type="number" required min="1" className="w-full border p-2 rounded" value={form.capacity} onChange={e=>setForm({...form, capacity: e.target.value})} /></div>
                             <div className="bg-gray-50 p-3 rounded border space-y-2 mt-4">
-                              <h3 className="text-sm font-bold text-gray-700">
-                                {form.mode === 'monthly' ? `各等級 ${monthlyInfo.count || 4} 堂總收費 (NT$)` : '各等級單堂收費 (NT$)'}
-                              </h3>
-                              <p className="text-[11px] text-emerald-600 bg-emerald-50 p-1.5 rounded mb-2">
-                                💡 只要修改「普通」價格，系統就會自動算出優惠。
-                              </p>
+                              <h3 className="text-sm font-bold text-gray-700">各等級收費 (NT$)</h3>
                               {[1,2,3,4,5].map(lvl => (
-                                <div key={lvl} className="flex items-center text-sm">
-                                  <span className="w-16 font-semibold text-gray-600">{LEVEL_NAMES[lvl]}</span>
-                                  <input type="number" required min="0" className="flex-1 border p-1 rounded px-2" value={form.prices[lvl]} onChange={e=>updatePrice(lvl, e.target.value)} />
-                                </div>
+                                <div key={lvl} className="flex items-center text-sm"><span className="w-16 font-semibold text-gray-600">{LEVEL_NAMES[lvl]}</span><input type="number" required min="0" className="flex-1 border p-1 rounded px-2" value={form.prices[lvl]} onChange={e=>updatePrice(lvl, e.target.value)} /></div>
                               ))}
                             </div>
                         </>
                     ) : (
                         <div className="bg-indigo-50 p-3 rounded border border-indigo-100 space-y-3 mt-4">
                             <h3 className="text-sm font-bold text-indigo-800">專屬教練課收費設定 (基準價)</h3>
-                            <p className="text-[11px] text-indigo-600 mb-2 leading-relaxed">
-                                💡 地點將於學員預約時自行選擇。<br/>總名額將自動鎖定為 1 組，預約即下架。
-                            </p>
-                            <div className="flex items-center text-sm gap-2">
-                                <span className="w-20 font-semibold text-indigo-900">1對1 基準價</span>
-                                <input type="number" required min="0" className="flex-1 border p-1.5 rounded px-2" value={form.coachBase1v1} onChange={e=>setForm({...form, coachBase1v1: e.target.value})} />
-                            </div>
-                            <div className="flex items-center text-sm gap-2">
-                                <span className="w-20 font-semibold text-indigo-900">1對2 基準價</span>
-                                <input type="number" required min="0" className="flex-1 border p-1.5 rounded px-2" value={form.coachBase1v2} onChange={e=>setForm({...form, coachBase1v2: e.target.value})} />
-                            </div>
+                            <div className="flex items-center text-sm gap-2"><span className="w-20 font-semibold text-indigo-900">1對1 基準價</span><input type="number" required min="0" className="flex-1 border p-1.5 rounded px-2" value={form.coachBase1v1} onChange={e=>setForm({...form, coachBase1v1: e.target.value})} /></div>
+                            <div className="flex items-center text-sm gap-2"><span className="w-20 font-semibold text-indigo-900">1對2 基準價</span><input type="number" required min="0" className="flex-1 border p-1.5 rounded px-2" value={form.coachBase1v2} onChange={e=>setForm({...form, coachBase1v2: e.target.value})} /></div>
                         </div>
                     )}
-
                     <button type="submit" disabled={loading} className="w-full bg-slate-800 text-white p-3 rounded font-bold mt-2">上架時段</button>
                   </form>
                 </div>
 
-                {/* 右側：資料檢視區 */}
+                {/* 資料清單 */}
                 <div className="col-span-2 space-y-6">
                     <div className="bg-white p-6 rounded-xl shadow-sm border">
                         <div className="flex justify-between items-center mb-4 border-b pb-2">
-                            <h2 className="font-bold text-lg text-emerald-700">所有已開課程 (狀態總覽)</h2>
+                            <h2 className="font-bold text-lg text-emerald-700">已開課程與時段</h2>
                             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">共 {slots.length} 堂</span>
                         </div>
                         <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
                           <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="sticky top-0 bg-white shadow-sm"><tr className="text-gray-600">
-                              <th className="p-3">課程名稱</th>
-                              <th className="p-3">日期 / 時間</th>
-                              <th className="p-3 text-center">預約進度</th>
-                              <th className="p-3 text-center">操作</th>
-                            </tr></thead>
+                            <thead className="sticky top-0 bg-white shadow-sm"><tr className="text-gray-600"><th className="p-3">課程名稱</th><th className="p-3">日期/時間</th><th className="p-3 text-center">進度</th><th className="p-3 text-center">操作</th></tr></thead>
                             <tbody>
-                              {slots.length === 0 ? (
-                                  <tr><td colSpan="4" className="p-4 text-center text-gray-400">尚無開課紀錄</td></tr>
-                              ) : (
-                                  slots.map((s, idx) => {
-                                    const booked = s.capacity - s.remaining;
-                                    const isFull = booked >= s.capacity;
-                                    const isCoachSlot = s.title.startsWith('[專屬教練課]');
-                                    const displayTitle = isCoachSlot ? '教練開放時段' : s.title;
-
-                                    return (
-                                      <tr key={idx} className="border-b hover:bg-gray-50">
-                                        <td className="p-3">
-                                            <span className="font-bold text-gray-800">{displayTitle}</span>
-                                            {isCoachSlot && <span className="ml-2 text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold tracking-wide">1對1/1對2</span>}
-                                        </td>
-                                        <td className="p-3 text-gray-500">{s.date} <br/><span className="text-xs">{s.time}</span></td>
-                                        <td className="p-3 text-center">
-                                            <span className={`px-3 py-1 rounded-full font-bold text-xs ${isFull ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                {booked} / {s.capacity}
-                                            </span>
-                                        </td>
-                                        {/* 【新增】刪除按鈕 */}
-                                        <td className="p-3 text-center">
-                                            <button 
-                                                onClick={() => handleDeleteSlot(s.id, displayTitle, s.date)} 
-                                                disabled={loading}
-                                                className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition text-xs font-bold disabled:opacity-50"
-                                            >
-                                                刪除
-                                            </button>
-                                        </td>
-                                      </tr>
-                                    )
-                                  })
-                              )}
+                              {slots.map((s, idx) => {
+                                const booked = s.capacity - s.remaining;
+                                const isFull = booked >= s.capacity;
+                                const isCoach = s.title.startsWith('[專屬教練課]');
+                                return (
+                                  <tr key={idx} className="border-b hover:bg-gray-50">
+                                    <td className="p-3"><span className="font-bold text-gray-800">{isCoach ? '教練開放時段' : s.title}</span></td>
+                                    <td className="p-3 text-gray-500">{s.date} <br/><span className="text-xs">{s.time}</span></td>
+                                    <td className="p-3 text-center"><span className={`px-2 py-1 rounded-full font-bold text-xs ${isFull ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>{booked}/{s.capacity}</span></td>
+                                    <td className="p-3 text-center"><button onClick={() => handleDeleteSlot(s.id, s.title, s.date)} className="text-red-500 hover:text-red-700 font-bold text-xs">刪除</button></td>
+                                  </tr>
+                                )
+                              })}
                             </tbody>
                           </table>
                         </div>
                     </div>
 
                     <div className="bg-white p-6 rounded-xl shadow-sm border">
-                      <h2 className="font-bold text-lg mb-4 border-b pb-2 text-slate-800">最新學生預約名單</h2>
+                      <h2 className="font-bold text-lg mb-4 border-b pb-2 text-slate-800">最新預約名單</h2>
                       <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
                         <table className="w-full text-left text-sm whitespace-nowrap">
-                          <thead className="sticky top-0 bg-white shadow-sm"><tr className="text-gray-600">
-                            <th className="p-3">時段 ID</th>
-                            <th className="p-3">學生姓名 (方案)</th>
-                            <th className="p-3">實收金額</th>
-                          </tr></thead>
+                          <thead className="sticky top-0 bg-white shadow-sm"><tr className="text-gray-600"><th className="p-3">時段 ID</th><th className="p-3">學生姓名</th><th className="p-3">實收金額</th></tr></thead>
                           <tbody>
-                            {bookings.length === 0 ? (
-                                <tr><td colSpan="3" className="p-4 text-center text-gray-400">目前尚無預約資料</td></tr>
-                            ) : (
-                                bookings.slice().reverse().map((b, idx) => ( 
-                                  <tr key={idx} className="border-b hover:bg-gray-50">
-                                    <td className="p-3 font-mono text-xs text-gray-400">{b.slotId}</td>
-                                    <td className="p-3 font-bold text-gray-800">{b.name}</td>
-                                    <td className="p-3 text-emerald-600 font-bold">NT$ {b.paidPrice}</td>
-                                  </tr>
-                                ))
-                            )}
+                            {bookings.slice().reverse().map((b, idx) => (
+                              <tr key={idx} className="border-b hover:bg-gray-50">
+                                <td className="p-3 font-mono text-xs text-gray-400">{b.slotId}</td>
+                                <td className="p-3 font-bold text-gray-800">{b.name}</td>
+                                <td className="p-3 text-emerald-600 font-bold">NT$ {b.paidPrice}</td>
+                              </tr>
+                            ))}
                           </tbody>
                         </table>
                       </div>
                     </div>
                 </div>
               </div>
-            </div>
           );
+        };
+
+        // --- 教練功能 2：學員名單與寫日誌 ---
+        const CoachMembersView = () => {
+            const [members, setMembers] = useState([]);
+            const [logModal, setLogModal] = useState({ isOpen: false, student: null });
+
+            const fetchMembers = () => {
+                fetchAPI({ action: 'getCoachData' }).then(res => setMembers(res.members || []));
+            };
+
+            useEffect(() => { fetchMembers(); }, []);
+
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-sm border">
+                    <h2 className="font-bold text-lg mb-4 border-b pb-2 text-slate-800">學員名單總覽</h2>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                            <thead className="bg-gray-50 text-gray-600 border-b">
+                                <tr>
+                                    <th className="p-4">學員姓名</th>
+                                    <th className="p-4">會員等級</th>
+                                    <th className="p-4 text-center">累計預約堂數</th>
+                                    <th className="p-4 text-center">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {members.length === 0 ? (
+                                    <tr><td colSpan="4" className="p-6 text-center text-gray-400">目前尚無會員資料</td></tr>
+                                ) : (
+                                    members.map((m, i) => (
+                                        <tr key={i} className="border-b hover:bg-gray-50 transition">
+                                            <td className="p-4 font-bold text-lg text-slate-800">{m.name}</td>
+                                            <td className="p-4">
+                                                <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded">{LEVEL_NAMES[m.level]}</span>
+                                            </td>
+                                            <td className="p-4 text-center font-extrabold text-slate-600 text-xl">{m.totalClasses}</td>
+                                            <td className="p-4 text-center">
+                                                <button onClick={()=>setLogModal({isOpen: true, student: m})} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded shadow-sm text-xs transition">
+                                                    撰寫訓練日誌
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* 彈出：寫日誌視窗 */}
+                    {logModal.isOpen && <LogFormModal student={logModal.student} onClose={()=>setLogModal({isOpen: false, student: null})} />}
+                </div>
+            );
+        };
+
+        // --- 彈出表單：撰寫日誌 ---
+        const LogFormModal = ({ student, onClose }) => {
+            const [date, setDate] = useState(formatDate(new Date()));
+            const [note, setNote] = useState('');
+            const [submitting, setSubmitting] = useState(false);
+            
+            // 建立 9 個項目的獨立 state，預設 0 (代表未訓練)
+            const [stats, setStats] = useState({
+                clears: 0, drives: 0, lifts: 0, drops: 0, net: 0, pushes: 0, smashes: 0, defense: 0, combo: 0
+            });
+
+            const handleStatChange = (key, val) => {
+                setStats(prev => ({ ...prev, [key]: Number(val) }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setSubmitting(true);
+                await fetchAPI({
+                    action: 'addLog',
+                    lineId: student.lineId,
+                    name: student.name,
+                    date: date,
+                    stats: stats,
+                    note: note
+                });
+                alert('日誌儲存成功！');
+                setSubmitting(false);
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-900 bg-opacity-60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden my-8">
+                        <div className="bg-slate-800 p-4 text-white flex justify-between items-center">
+                            <h3 className="font-bold text-lg">撰寫訓練日誌：{student.name}</h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-xl px-2">&times;</button>
+                        </div>
+                        
+                        <form onSubmit={handleSubmit} className="p-6">
+                            <div className="mb-6">
+                                <label className="block text-sm font-bold text-slate-700 mb-2">本次上課日期</label>
+                                <input type="date" required className="border border-slate-300 p-2 rounded w-full max-w-xs" value={date} onChange={e=>setDate(e.target.value)} />
+                            </div>
+
+                            <div className="mb-6">
+                                <div className="flex justify-between items-end mb-3 border-b pb-2">
+                                    <label className="block text-sm font-bold text-slate-700">訓練項目評分 / 時數</label>
+                                    <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded">0 = 未訓練，最高 5 分</span>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
+                                    {SKILL_KEYS.map(skill => (
+                                        <div key={skill.key} className="flex flex-col bg-slate-50 p-2 rounded border border-slate-100">
+                                            <div className="flex justify-between text-sm font-bold text-slate-700 mb-1">
+                                                <span>{skill.label}</span>
+                                                <span className={stats[skill.key] > 0 ? "text-emerald-600" : "text-slate-400"}>{stats[skill.key]}</span>
+                                            </div>
+                                            <input type="range" min="0" max="5" step="0.5" value={stats[skill.key]} onChange={e => handleStatChange(skill.key, e.target.value)} className="w-full accent-emerald-500" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="mb-6">
+                                <label className="block text-sm font-bold text-slate-700 mb-2">教練綜合短評 (日誌)</label>
+                                <textarea className="w-full border border-slate-300 p-3 rounded h-24 outline-none focus:border-emerald-500" placeholder="例如：殺球發力明顯進步，但防守退步步伐需要再加強..." value={note} onChange={e=>setNote(e.target.value)}></textarea>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-4 border-t">
+                                <button type="button" onClick={onClose} className="px-5 py-2 font-bold text-slate-600 bg-slate-100 rounded hover:bg-slate-200">取消</button>
+                                <button type="submit" disabled={submitting} className="px-5 py-2 font-bold text-white bg-emerald-600 rounded hover:bg-emerald-700 shadow-sm disabled:opacity-50">
+                                    {submitting ? '儲存中...' : '送出日誌'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
