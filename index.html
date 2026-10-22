@@ -639,3 +639,196 @@
                             <div className="flex items-center text-base md:text-sm gap-3"><span className="w-20 font-bold text-indigo-900">1對2 基準價</span><input type="number" required min="0" className="flex-1 border border-indigo-200 p-2 rounded-lg px-3" value={form.coachBase1v2} onChange={e=>setForm({...form, coachBase1v2: e.target.value})} /></div>
                             
                             <h3 className="text-sm font-bold text-indigo-800 border-b border-indigo-200 pb-2 mt-4">開放學員可選場地</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {LOCATIONS_LIST.map(loc => (
+                                    <label key={loc} className="flex items-center gap-1.5 text-sm cursor-pointer bg-white px-2 py-1.5 rounded border border-indigo-200 shadow-sm transition hover:bg-indigo-100">
+                                        <input type="checkbox" checked={allowedLocations.includes(loc)} onChange={() => toggleLocation(loc)} className="accent-indigo-600 w-4 h-4" />
+                                        <span className="text-indigo-900 font-medium">{loc === '自理場地(需私訊確認)' ? '其他場地(自理)' : loc}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    <button type="submit" disabled={loading} className="w-full bg-slate-800 text-white p-4 rounded-lg font-bold text-lg mt-6 active:scale-[0.98] transition">上架時段</button>
+                  </form>
+                </div>
+
+                <div className="col-span-2 space-y-6 md:space-y-8">
+                    <div className="bg-white p-4 md:p-8 rounded-2xl shadow-sm border w-full overflow-hidden">
+                        <div className="flex justify-between items-center mb-5 border-b pb-3">
+                            <h2 className="font-bold text-lg md:text-xl text-emerald-700">已開課程與時段</h2>
+                            <span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">共 {slots.length} 堂</span>
+                        </div>
+                        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                          <table className="w-full min-w-max text-left text-sm md:text-base whitespace-nowrap">
+                            <thead className="sticky top-0 bg-white shadow-sm z-10"><tr className="text-gray-600"><th className="p-3 md:p-4">課程名稱</th><th className="p-3 md:p-4">日期/時間</th><th className="p-3 md:p-4 text-center">進度</th><th className="p-3 md:p-4 text-center">操作</th></tr></thead>
+                            <tbody>
+                              {slots.map((s, idx) => {
+                                const booked = s.capacity - s.remaining;
+                                const isFull = booked >= s.capacity;
+                                const isCoach = s.title.startsWith('[專屬教練課]');
+                                const displayLoc = s.location.startsWith('coach_loc:') ? '學員自選場地' : s.location;
+                                return (
+                                  <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                                    <td className="p-3 md:p-4"><span className="font-bold text-gray-800">{isCoach ? '教練開放時段' : s.title}</span></td>
+                                    <td className="p-3 md:p-4 text-gray-500">{s.date} <br/><span className="text-xs md:text-sm">{s.time} • {displayLoc}</span></td>
+                                    <td className="p-3 md:p-4 text-center"><span className={`px-3 py-1 rounded-full font-bold text-xs md:text-sm ${isFull ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>{booked}/{s.capacity}</span></td>
+                                    <td className="p-3 md:p-4 text-center"><button onClick={() => handleDeleteSlot(s.id, s.title, s.date)} className="text-red-600 hover:text-red-800 font-bold text-sm bg-red-50 hover:bg-red-100 px-4 py-2 rounded-lg active:scale-95 transition">刪除</button></td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-4 md:p-8 rounded-2xl shadow-sm border w-full overflow-hidden">
+                      <h2 className="font-bold text-lg md:text-xl mb-5 border-b pb-3 text-slate-800">最新預約名單</h2>
+                      <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                        <table className="w-full min-w-max text-left text-sm md:text-base whitespace-nowrap">
+                          <thead className="sticky top-0 bg-white shadow-sm z-10"><tr className="text-gray-600"><th className="p-3 md:p-4">時段 ID</th><th className="p-3 md:p-4">學生姓名</th><th className="p-3 md:p-4">實收金額</th></tr></thead>
+                          <tbody>
+                            {bookings.slice().reverse().map((b, idx) => (
+                              <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                                <td className="p-3 md:p-4 font-mono text-xs md:text-sm text-gray-400">{b.slotId}</td>
+                                <td className="p-3 md:p-4 font-bold text-gray-800">{b.name}</td>
+                                <td className="p-3 md:p-4 text-emerald-600 font-bold">NT$ {b.paidPrice}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                </div>
+              </div>
+          );
+        };
+
+        // --- 教練功能 2：學員名單與寫日誌 ---
+        const CoachMembersView = () => {
+            const [members, setMembers] = useState([]);
+            const [logModal, setLogModal] = useState({ isOpen: false, student: null });
+
+            const fetchMembers = () => {
+                fetchAPI({ action: 'getCoachData' }).then(res => setMembers(res.members || []));
+            };
+
+            useEffect(() => { fetchMembers(); }, []);
+
+            return (
+                <div className="bg-white p-4 md:p-8 rounded-2xl shadow-sm border w-full overflow-hidden">
+                    <h2 className="font-bold text-lg md:text-xl mb-5 border-b pb-3 text-slate-800">學員名單總覽</h2>
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-max text-left text-sm md:text-base whitespace-nowrap">
+                            <thead className="bg-gray-50 text-gray-600 border-b border-gray-200">
+                                <tr>
+                                    <th className="p-3 md:p-4">學員姓名</th>
+                                    <th className="p-3 md:p-4">會員等級</th>
+                                    <th className="p-3 md:p-4 text-center">累計堂數</th>
+                                    <th className="p-3 md:p-4 text-center">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {members.length === 0 ? (
+                                    <tr><td colSpan="4" className="p-8 text-center text-gray-400">目前尚無會員資料</td></tr>
+                                ) : (
+                                    members.map((m, i) => (
+                                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition">
+                                            <td className="p-3 md:p-4 font-bold text-base md:text-lg text-slate-800">{m.name}</td>
+                                            <td className="p-3 md:p-4">
+                                                <span className="bg-amber-100 text-amber-800 text-xs md:text-sm font-bold px-3 py-1.5 rounded-md">{LEVEL_NAMES[m.level]}</span>
+                                            </td>
+                                            <td className="p-3 md:p-4 text-center font-extrabold text-slate-600 text-xl md:text-2xl">{m.totalClasses}</td>
+                                            <td className="p-3 md:p-4 text-center">
+                                                <button onClick={()=>setLogModal({isOpen: true, student: m})} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 md:px-6 rounded-lg shadow-sm text-sm active:scale-95 transition">
+                                                    撰寫日誌
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {logModal.isOpen && <LogFormModal student={logModal.student} onClose={()=>setLogModal({isOpen: false, student: null})} />}
+                </div>
+            );
+        };
+
+        const LogFormModal = ({ student, onClose }) => {
+            const [date, setDate] = useState(formatDate(new Date()));
+            const [note, setNote] = useState('');
+            const [submitting, setSubmitting] = useState(false);
+            
+            const [stats, setStats] = useState({
+                clears: 0, drives: 0, lifts: 0, drops: 0, net: 0, pushes: 0, smashes: 0, defense: 0, combo: 0
+            });
+
+            const handleStatChange = (key, val) => {
+                setStats(prev => ({ ...prev, [key]: Number(val) }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setSubmitting(true);
+                await fetchAPI({ action: 'addLog', lineId: student.lineId, name: student.name, date: date, stats: stats, note: note });
+                alert('日誌儲存成功！');
+                setSubmitting(false);
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-900 bg-opacity-60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
+                        <div className="bg-slate-800 p-5 text-white flex justify-between items-center shrink-0">
+                            <h3 className="font-bold text-base md:text-lg">訓練日誌：{student.name}</h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-2xl px-2 leading-none active:scale-90">&times;</button>
+                        </div>
+                        
+                        <form onSubmit={handleSubmit} className="p-4 md:p-6 overflow-y-auto">
+                            <div className="mb-5">
+                                <label className="block text-sm font-bold text-slate-700 mb-2">本次上課日期</label>
+                                <input type="date" required className="border border-gray-300 p-2.5 rounded w-full md:max-w-xs text-base" value={date} onChange={e=>setDate(e.target.value)} />
+                            </div>
+
+                            <div className="mb-5">
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-3 border-b pb-2 gap-2">
+                                    <label className="block text-sm md:text-base font-bold text-slate-700">訓練評分 / 時數</label>
+                                    <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded w-fit font-bold">0 = 未訓練，最高 5 分</span>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-x-6 md:gap-y-4">
+                                    {SKILL_KEYS.map(skill => (
+                                        <div key={skill.key} className="flex flex-col bg-slate-50 p-2.5 rounded border border-slate-100">
+                                            <div className="flex justify-between text-sm md:text-base font-bold text-slate-700 mb-2.5">
+                                                <span>{skill.label}</span>
+                                                <span className={stats[skill.key] > 0 ? "text-emerald-600 font-extrabold" : "text-slate-400"}>{stats[skill.key]}</span>
+                                            </div>
+                                            <input type="range" min="0" max="5" step="0.5" value={stats[skill.key]} onChange={e => handleStatChange(skill.key, e.target.value)} className="w-full accent-emerald-500" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-sm font-bold text-slate-700 mb-2">教練綜合短評 (日誌)</label>
+                                <textarea className="w-full border border-gray-300 p-4 rounded-xl h-28 text-base outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 leading-relaxed" placeholder="例如：發力明顯進步，但防守步伐需要加強..." value={note} onChange={e=>setNote(e.target.value)}></textarea>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-4 border-t mt-auto">
+                                <button type="button" onClick={onClose} className="px-5 py-2.5 font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 text-sm active:scale-95 transition">取消</button>
+                                <button type="submit" disabled={submitting} className="px-5 py-2.5 font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-sm disabled:opacity-50 text-sm active:scale-95 transition">
+                                    {submitting ? '儲存中...' : '送出日誌'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
