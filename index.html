@@ -29,7 +29,6 @@
             { key: 'combo', label: '組合訓練' }
         ];
 
-        // 系統內建的所有場地清單
         const LOCATIONS_LIST = ['關聖里活動中心', '永康嘉世', '仁德羽潮', '南區羽潮', '自理場地(需私訊確認)'];
 
         const getVIPDiscount = (lvl) => {
@@ -166,7 +165,6 @@
           if (view === 'coach') return <CoachDashboard />;
         };
 
-        // --- 學生：首次註冊 ---
         const RegisterView = ({ profile, onRegistered }) => {
           const [form, setForm] = useState({ name: profile.displayName || '', age: '', phone: '' });
           const [submitting, setSubmitting] = useState(false);
@@ -176,7 +174,7 @@
             const cleanPhone = form.phone.replace(/[\s-]/g, '');
             const phoneRegex = /^09\d{8}$/;
             if (!phoneRegex.test(cleanPhone)) {
-              alert('手機號碼格式錯誤！\n請輸入 09 開頭的 10 位數字 (例如：0912345678)');
+              alert('手機號碼格式錯誤！\n請輸入 09 開頭的 10 位數字');
               return;
             }
             setSubmitting(true);
@@ -188,7 +186,7 @@
           return (
             <div className="max-w-md md:max-w-lg mx-auto md:my-16 mx-4 p-8 bg-white md:rounded-2xl shadow-xl border-t-4 border-slate-800 min-h-screen md:min-h-0">
               <div className="flex items-center gap-4 mb-6 border-b pb-6">
-                <img src="./ll.png" alt="樂動羽球" className="w-16 h-16 rounded-full shadow-sm object-cover" />
+                <img src="./logo.png" alt="樂動羽球" className="w-16 h-16 rounded-full shadow-sm object-cover" />
                 <div>
                   <h2 className="text-2xl font-bold text-slate-800">歡迎來到樂動羽球</h2>
                   <p className="text-sm text-slate-500 mt-1">首次登入請綁定學員資料</p>
@@ -215,7 +213,6 @@
           );
         };
 
-        // --- 學生：雙頁籤總成 ---
         const StudentDashboard = ({ profile, userRecord }) => {
             const [activeTab, setActiveTab] = useState('booking'); 
             const userLevel = userRecord.level || 1;
@@ -226,7 +223,7 @@
                         <div className="flex justify-between items-center mb-5 md:mb-6">
                             <div>
                                 <div className="flex items-center gap-3 md:gap-4">
-                                    <img src="./ll.png" alt="樂動羽球" className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-white p-0.5 object-cover shadow-sm" />
+                                    <img src="./logo.png" alt="樂動羽球" className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-white p-0.5 object-cover shadow-sm" />
                                     <div className="flex flex-col justify-center">
                                         <span className="text-[11px] md:text-sm text-emerald-400 font-bold tracking-[0.15em] mb-0.5">
                                             樂在運動，動出健康
@@ -236,7 +233,7 @@
                                         </h1>
                                     </div>
                                 </div>
-                                <p className="text-sm md:text-base text-slate-300 mt-2">嗨,{userRecord.name}，安排練球運動運動嗎?</p>
+                                <p className="text-sm md:text-base text-slate-300 mt-2">{userRecord.name}，歡迎！</p>
                                 <div className="mt-2 inline-block bg-amber-500 text-slate-900 text-xs md:text-sm font-bold px-2.5 py-1 rounded shadow-sm">
                                     {LEVEL_NAMES[userLevel]} 會員
                                 </div>
@@ -255,13 +252,14 @@
             )
         };
 
-        // --- 學生功能 1：課程預約 ---
         const StudentBookingView = ({ profile, userRecord }) => {
           const [slots, setSlots] = useState([]);
           const [status, setStatus] = useState('idle');
           const [currentMonth, setCurrentMonth] = useState(new Date());
           const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
           const [studentLocations, setStudentLocations] = useState({}); 
+          const [bookingTarget, setBookingTarget] = useState(null); // 【新增】彈出視窗目標
+          const [paymentCode, setPaymentCode] = useState(''); // 【新增】後五碼
           const userLevel = userRecord.level || 1;
 
           useEffect(() => {
@@ -271,7 +269,8 @@
             });
           }, []);
 
-          const handleBook = async (slot, type = null, customPrice = null, selectedLoc = null) => {
+          // 點擊預約按鈕，跳出付款確認視窗
+          const handleBookClick = (slot, type = null, customPrice = null, selectedLoc = null) => {
             const myPrice = customPrice || slot.prices[userLevel];
             let titleDisplay = slot.title;
             let finalName = userRecord.name;
@@ -279,10 +278,23 @@
                 titleDisplay = `教練專屬時段 (${type} 於 ${selectedLoc})`;
                 finalName = `${userRecord.name} [${type} - ${selectedLoc}]`;
             }
-            if (!confirm(`確定預約 ${titleDisplay}？\n時間：${slot.date} ${slot.time}\n專屬費用：NT$ ${myPrice}`)) return;
+            setBookingTarget({ slot, titleDisplay, finalName, myPrice });
+            setPaymentCode(''); // 重置五碼
+          };
+
+          // 確認送出預約
+          const confirmBooking = async () => {
             setStatus('booking');
-            await fetchAPI({ action: 'bookClass', slotId: slot.id, lineId: profile.userId, name: finalName, paidPrice: myPrice });
+            await fetchAPI({ 
+                action: 'bookClass', 
+                slotId: bookingTarget.slot.id, 
+                lineId: profile.userId, 
+                name: bookingTarget.finalName, 
+                paidPrice: bookingTarget.myPrice,
+                paymentCode: paymentCode 
+            });
             setStatus('success');
+            setBookingTarget(null);
           };
 
           const year = currentMonth.getFullYear();
@@ -299,12 +311,13 @@
           if (status === 'success') return (
             <div className="p-8 text-center bg-white rounded-xl shadow-md m-6 md:m-10 border-t-4 border-emerald-500">
               <h2 className="text-2xl font-bold text-emerald-600 mb-4">預約成功！</h2>
+              <p className="text-gray-500 mb-6">您的訂單目前為<span className="text-amber-600 font-bold mx-1">審核中</span><br/>可隨時至「我的訓練紀錄」追蹤狀態或補登後五碼。</p>
               <button onClick={() => window.location.reload()} className="w-full max-w-xs mx-auto bg-slate-800 text-white py-3 rounded-lg font-bold block">繼續預約</button>
             </div>
           );
 
           return (
-            <div className="flex flex-col md:flex-row gap-0 md:gap-8 p-0 md:p-8 pb-10">
+            <div className="flex flex-col md:flex-row gap-0 md:gap-8 p-0 md:p-8 pb-10 relative">
               <div className="bg-white px-2 md:px-6 py-4 md:py-6 shadow-sm border-b md:border md:rounded-2xl w-full md:w-1/3 md:sticky md:top-6 h-fit">
                 <div className="flex justify-between items-center mb-4 px-4">
                     <button onClick={prevMonth} className="font-bold text-gray-500 hover:text-emerald-600 px-4 py-1 bg-gray-100 rounded active:scale-95">&lt;</button>
@@ -357,14 +370,13 @@
                           const isCoachSlot = slot.title.startsWith('[專屬教練課]');
                           const isFull = Number(slot.remaining) <= 0;
 
-                          // 解析教練開放的場地選項
                           let availableLocs = LOCATIONS_LIST;
                           let slotDisplayLocation = slot.location;
                           if (slot.location && slot.location.startsWith('coach_loc:')) {
                               availableLocs = slot.location.replace('coach_loc:', '').split(',');
                               slotDisplayLocation = '學員自選場地';
                           } else if (isCoachSlot) {
-                              slotDisplayLocation = '學員自選場地'; // 舊資料相容
+                              slotDisplayLocation = '學員自選場地'; 
                           }
 
                           if (isCoachSlot) {
@@ -374,8 +386,6 @@
                               const discount = getVIPDiscount(userLevel);
                               const my1v1 = Math.round(base1v1 * discount);
                               const my1v2 = Math.round(base1v2 * discount);
-                              
-                              // 預設選擇為開放清單的第一個
                               const selectedLoc = studentLocations[slot.id] || availableLocs[0] || '關聖里活動中心';
 
                               return (
@@ -404,14 +414,14 @@
                                                 <span className={`font-bold text-sm md:text-base ${isFull ? 'text-gray-500' : 'text-green-700'}`}>1對1 教練課</span>
                                                 <div className="mt-0.5"><span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold text-lg`}>NT$ {my1v1}</span></div>
                                             </div>
-                                            <button onClick={() => handleBook(slot, '1對1', my1v1, selectedLoc)} disabled={status==='booking' || isFull} className={`font-bold py-2 px-5 rounded-lg text-sm md:text-base active:scale-95 transition-transform ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>{isFull ? '已額滿' : '預約 1對1'}</button>
+                                            <button onClick={() => handleBookClick(slot, '1對1', my1v1, selectedLoc)} disabled={status==='booking' || isFull} className={`font-bold py-2 px-5 rounded-lg text-sm md:text-base active:scale-95 transition-transform ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>{isFull ? '已額滿' : '預約 1對1'}</button>
                                         </div>
                                         <div className={`flex-1 flex justify-between items-center p-3 rounded-lg border shadow-sm ${isFull ? 'bg-gray-100 border-gray-200' : 'bg-white border-green-100'}`}>
                                             <div className={isFull ? 'opacity-60' : ''}>
                                                 <span className={`font-bold text-sm md:text-base ${isFull ? 'text-gray-500' : 'text-green-700'}`}>1對2 教練課</span>
                                                 <div className="mt-0.5"><span className={`${isFull ? 'text-gray-500' : 'text-emerald-600'} font-bold text-lg`}>NT$ {my1v2}</span></div>
                                             </div>
-                                            <button onClick={() => handleBook(slot, '1對2', my1v2, selectedLoc)} disabled={status==='booking' || isFull} className={`font-bold py-2 px-5 rounded-lg text-sm md:text-base active:scale-95 transition-transform ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>{isFull ? '已額滿' : '預約 1對2'}</button>
+                                            <button onClick={() => handleBookClick(slot, '1對2', my1v2, selectedLoc)} disabled={status==='booking' || isFull} className={`font-bold py-2 px-5 rounded-lg text-sm md:text-base active:scale-95 transition-transform ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>{isFull ? '已額滿' : '預約 1對2'}</button>
                                         </div>
                                     </div>
                                 </div>
@@ -431,7 +441,7 @@
                                   <div className="font-semibold text-gray-800 mt-2 text-sm md:text-base">{slot.date}</div>
                                   <div className="text-sm text-gray-500 mt-1">{slot.time} • {slot.location}</div>
                                 </div>
-                                <button onClick={() => handleBook(slot)} disabled={status==='booking' || isFull} className={`font-bold py-2.5 px-6 rounded-lg shadow-sm text-sm md:text-base active:scale-95 transition-transform whitespace-nowrap ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>{isFull ? '已額滿' : '預約'}</button>
+                                <button onClick={() => handleBookClick(slot)} disabled={status==='booking' || isFull} className={`font-bold py-2.5 px-6 rounded-lg shadow-sm text-sm md:text-base active:scale-95 transition-transform whitespace-nowrap ${isFull ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>{isFull ? '已額滿' : '預約'}</button>
                               </div>
                               <div className={`mt-4 pt-4 border-t flex items-center justify-between w-full ${isFull ? 'border-gray-200 opacity-60' : 'border-gray-100'}`}>
                                 <div className="flex items-baseline gap-2">
@@ -446,25 +456,133 @@
                     </div>
                 )}
               </div>
+
+              {/* 【新增】預約確認與填寫付款五碼彈窗 */}
+              {bookingTarget && (
+                <div className="fixed inset-0 bg-slate-900 bg-opacity-60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-[pulse_0.2s_ease-out_1]">
+                        <div className="bg-slate-800 p-4 text-white">
+                            <h3 className="font-bold text-lg">確認預約資訊</h3>
+                        </div>
+                        <div className="p-6 space-y-5">
+                            <div>
+                                <div className="text-sm text-gray-500 mb-1">預約項目</div>
+                                <div className="font-bold text-lg text-slate-800 leading-tight">{bookingTarget.titleDisplay}</div>
+                                <div className="text-sm text-emerald-600 font-bold mt-1.5">{bookingTarget.slot.date} {bookingTarget.slot.time}</div>
+                            </div>
+                            <div>
+                                <div className="text-sm text-gray-500 mb-1">應繳金額</div>
+                                <div className="font-black text-2xl text-emerald-600">NT$ {bookingTarget.myPrice}</div>
+                            </div>
+                            <div className="border-t pt-5">
+                                <label className="block text-sm font-bold text-slate-700 mb-2">匯款帳號後5碼 (選填)</label>
+                                <input 
+                                    type="text" 
+                                    maxLength="5" 
+                                    placeholder="例如: 12345"
+                                    className="w-full border border-gray-300 p-3 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none font-mono text-lg"
+                                    value={paymentCode}
+                                    onChange={e => setPaymentCode(e.target.value.replace(/\D/g, ''))}
+                                />
+                                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded mt-3 leading-relaxed">
+                                    💡 預約後訂單將進入「審核中」，教練對帳完成才會轉為「已完成」。<br/>若尚未匯款，您可先按確認，稍後再至紀錄中補登後五碼。
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex border-t border-gray-100">
+                            <button onClick={() => setBookingTarget(null)} className="flex-1 py-4 font-bold text-gray-500 hover:bg-gray-50 border-r border-gray-100 transition">取消</button>
+                            <button onClick={confirmBooking} disabled={status === 'booking'} className="flex-1 py-4 font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition active:scale-95 disabled:opacity-50">
+                                {status === 'booking' ? '處理中...' : '確定送出'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+              )}
             </div>
           );
+        };
+
+        // --- 【新增】預約紀錄中的付款狀態卡片元件 ---
+        const BookingStatusItem = ({ booking, onUpdate }) => {
+            const [code, setCode] = useState(booking.paymentCode);
+            const [updating, setUpdating] = useState(false);
+
+            const handleUpdate = async () => {
+                if(!code || code.length < 5) return alert("請輸入完整的帳號後5碼！");
+                setUpdating(true);
+                await fetchAPI({ action: 'updatePayment', bookingId: booking.bookingId, paymentCode: code });
+                alert("帳號後5碼已成功更新！請等待教練審核。");
+                setUpdating(false);
+                onUpdate();
+            };
+
+            const isCompleted = booking.status === '已完成';
+
+            return (
+                <div className={`border p-4 md:p-5 rounded-xl flex flex-col shadow-sm relative overflow-hidden ${isCompleted ? 'bg-gray-50 border-gray-200' : 'bg-amber-50 border-amber-200'}`}>
+                    {isCompleted ? (
+                        <div className="absolute top-0 right-0 bg-gray-200 text-gray-600 text-[10px] px-3 py-1 rounded-bl-lg font-bold">已結單</div>
+                    ) : (
+                        <div className="absolute top-0 right-0 bg-amber-200 text-amber-800 text-[10px] px-3 py-1 rounded-bl-lg font-bold animate-pulse">審核中</div>
+                    )}
+                    
+                    <div className="pr-12">
+                        <div className={`font-bold text-base md:text-lg ${isCompleted ? 'text-gray-600' : 'text-amber-800'}`}>{booking.slotTitle}</div>
+                        <div className="text-xs md:text-sm text-gray-500 mt-1">{booking.slotDate} {booking.slotTime}</div>
+                    </div>
+
+                    {!isCompleted && booking.bookingId && (
+                        <div className="mt-4 pt-3 border-t border-amber-200/50 flex items-center gap-2">
+                            <input 
+                                type="text" 
+                                placeholder="請輸入匯款後5碼" 
+                                maxLength="5"
+                                value={code} 
+                                onChange={e=>setCode(e.target.value.replace(/\D/g, ''))} 
+                                className="flex-1 border border-amber-200 bg-white rounded-lg p-2 md:p-2.5 text-sm md:text-base outline-none focus:ring-1 focus:ring-amber-500 font-mono transition"
+                            />
+                            <button onClick={handleUpdate} disabled={updating || (code === booking.paymentCode && code !== '')} className="bg-amber-600 text-white px-4 py-2 md:py-2.5 rounded-lg text-sm font-bold active:scale-95 transition disabled:opacity-50 whitespace-nowrap">
+                                {updating ? '更新中' : (booking.paymentCode ? '修改' : '補登')}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
         };
 
         // --- 學生功能 2：我的訓練紀錄 ---
         const StudentRecordsView = ({ lineId }) => {
             const [data, setData] = useState(null);
 
-            useEffect(() => {
+            const fetchRecords = () => {
                 fetchAPI({ action: 'getStudentStats', lineId }).then(res => setData(res));
-            }, []);
+            };
+
+            useEffect(() => { fetchRecords(); }, []);
 
             if (!data) return <div className="p-10 text-center text-gray-400">讀取資料中...</div>;
 
             return (
                 <div className="p-4 md:p-8 pb-10">
                     <div className="bg-white rounded-2xl shadow-sm border p-6 md:p-8 text-center border-t-4 border-t-amber-400 mb-6">
-                        <div className="text-sm md:text-base text-gray-500 font-bold mb-2">累積參與課程</div>
+                        <div className="text-sm md:text-base text-gray-500 font-bold mb-2">累積完成課程</div>
                         <div className="text-5xl md:text-6xl font-extrabold text-slate-800">{data.totalClasses} <span className="text-lg text-gray-500 font-normal">堂</span></div>
+                    </div>
+
+                    {/* 【新增】預約與繳費狀態 */}
+                    <div className="bg-white rounded-2xl shadow-sm border p-5 md:p-6 mb-6">
+                        <h3 className="font-bold text-slate-800 mb-4 ml-1 flex items-center text-base md:text-lg">
+                            <span className="w-1.5 h-5 bg-amber-500 rounded mr-2"></span>預約與繳費追蹤
+                        </h3>
+                        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+                            {data.bookings.length === 0 ? (
+                                <div className="text-center text-gray-400 text-sm py-6">目前尚無預約紀錄</div>
+                            ) : (
+                                data.bookings.map((b, i) => (
+                                    <BookingStatusItem key={i} booking={b} onUpdate={fetchRecords} />
+                                ))
+                            )}
+                        </div>
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-6">
@@ -510,7 +628,7 @@
                 <div className="max-w-6xl mx-auto min-h-screen flex flex-col bg-gray-50 md:shadow-lg md:rounded-b-2xl">
                     <div className="bg-slate-800 p-4 md:p-8 pb-0 text-white shadow-md relative z-10">
                         <div className="flex items-center gap-4 mb-5">
-                            <img src="./ll.png" alt="樂動羽球" className="w-10 h-10 md:w-14 md:h-14 rounded-full bg-white p-0.5 object-cover" />
+                            <img src="./logo.png" alt="樂動羽球" className="w-10 h-10 md:w-14 md:h-14 rounded-full bg-white p-0.5 object-cover" />
                             <h1 className="text-xl md:text-3xl font-bold tracking-wider">教練管理後台</h1>
                         </div>
                         <div className="flex w-full mt-2 border-b border-slate-600">
@@ -589,6 +707,15 @@
             fetchData(); setLoading(false);
           };
 
+          // 【新增】教練核准預約單
+          const handleApprove = async (bookingId) => {
+            if (!confirm("確認已收到款項並核准此預約？\n審核通過後，學員端將顯示「已完成」。")) return;
+            setLoading(true);
+            await fetchAPI({ action: 'approveBooking', bookingId });
+            fetchData();
+            setLoading(false);
+          };
+
           return (
               <div className="grid md:grid-cols-3 gap-6 md:gap-8">
                 <div className="bg-white p-5 md:p-8 rounded-2xl shadow-sm border col-span-1 h-fit">
@@ -634,12 +761,12 @@
                         </>
                     ) : (
                         <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 space-y-4 mt-4">
-                            <h3 className="text-sm font-bold text-indigo-800 border-b border-indigo-200 pb-2">專屬教練課收費設定</h3>
-                            <div className="flex items-center text-base md:text-sm gap-3"><span className="w-20 font-bold text-indigo-900">1對1 基準價</span><input type="number" required min="0" className="flex-1 border border-indigo-200 p-2 rounded-lg px-3" value={form.coachBase1v1} onChange={e=>setForm({...form, coachBase1v1: e.target.value})} /></div>
-                            <div className="flex items-center text-base md:text-sm gap-3"><span className="w-20 font-bold text-indigo-900">1對2 基準價</span><input type="number" required min="0" className="flex-1 border border-indigo-200 p-2 rounded-lg px-3" value={form.coachBase1v2} onChange={e=>setForm({...form, coachBase1v2: e.target.value})} /></div>
+                            <h3 className="text-sm font-bold text-indigo-800 border-b border-indigo-200 pb-2">專屬教練課收費設定 (基準價)</h3>
+                            <div className="flex items-center text-base md:text-sm gap-3"><span className="w-20 font-bold text-indigo-900">1對1 基準價</span><input type="number" required min="0" className="flex-1 border border-indigo-200 p-2 rounded-lg px-3 text-base" value={form.coachBase1v1} onChange={e=>setForm({...form, coachBase1v1: e.target.value})} /></div>
+                            <div className="flex items-center text-base md:text-sm gap-3"><span className="w-20 font-bold text-indigo-900">1對2 基準價</span><input type="number" required min="0" className="flex-1 border border-indigo-200 p-2 rounded-lg px-3 text-base" value={form.coachBase1v2} onChange={e=>setForm({...form, coachBase1v2: e.target.value})} /></div>
                             
                             <h3 className="text-sm font-bold text-indigo-800 border-b border-indigo-200 pb-2 mt-4">開放學員可選場地</h3>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-2 mt-2">
                                 {LOCATIONS_LIST.map(loc => (
                                     <label key={loc} className="flex items-center gap-1.5 text-sm cursor-pointer bg-white px-2 py-1.5 rounded border border-indigo-200 shadow-sm transition hover:bg-indigo-100">
                                         <input type="checkbox" checked={allowedLocations.includes(loc)} onChange={() => toggleLocation(loc)} className="accent-indigo-600 w-4 h-4" />
@@ -683,18 +810,43 @@
                     </div>
 
                     <div className="bg-white p-4 md:p-8 rounded-2xl shadow-sm border w-full overflow-hidden">
-                      <h2 className="font-bold text-lg md:text-xl mb-5 border-b pb-3 text-slate-800">最新預約名單</h2>
+                      <h2 className="font-bold text-lg md:text-xl mb-5 border-b pb-3 text-slate-800">最新預約名單 (教練審核對帳表)</h2>
                       <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                         <table className="w-full min-w-max text-left text-sm md:text-base whitespace-nowrap">
-                          <thead className="sticky top-0 bg-white shadow-sm z-10"><tr className="text-gray-600"><th className="p-3 md:p-4">時段 ID</th><th className="p-3 md:p-4">學生姓名</th><th className="p-3 md:p-4">實收金額</th></tr></thead>
+                          <thead className="sticky top-0 bg-white shadow-sm z-10"><tr className="text-gray-600">
+                              <th className="p-3 md:p-4">學生姓名</th>
+                              <th className="p-3 md:p-4">金額</th>
+                              <th className="p-3 md:p-4">狀態 / 後五碼</th>
+                              <th className="p-3 md:p-4 text-center">操作</th>
+                          </tr></thead>
                           <tbody>
-                            {bookings.slice().reverse().map((b, idx) => (
+                            {bookings.slice().reverse().map((b, idx) => {
+                               const isCompleted = b.status === "已完成";
+                               return (
                               <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                                <td className="p-3 md:p-4 font-mono text-xs md:text-sm text-gray-400">{b.slotId}</td>
                                 <td className="p-3 md:p-4 font-bold text-gray-800">{b.name}</td>
                                 <td className="p-3 md:p-4 text-emerald-600 font-bold">NT$ {b.paidPrice}</td>
+                                <td className="p-3 md:p-4">
+                                    {isCompleted ? (
+                                        <span className="text-gray-500 font-bold text-sm bg-gray-100 px-2 py-1 rounded-md">✅ 已完成</span>
+                                    ) : (
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-amber-600 font-bold text-sm animate-pulse">⏳ 審核中</span>
+                                            <span className="text-xs text-gray-500 font-mono bg-amber-50 w-fit px-1.5 py-0.5 rounded border border-amber-100">
+                                              末五碼: {b.paymentCode || '尚未填寫'}
+                                            </span>
+                                        </div>
+                                    )}
+                                </td>
+                                <td className="p-3 md:p-4 text-center">
+                                    {!isCompleted && b.bookingId && (
+                                        <button onClick={() => handleApprove(b.bookingId)} disabled={loading} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-1.5 px-3 rounded shadow-sm text-sm active:scale-95 transition disabled:opacity-50">
+                                            核准
+                                        </button>
+                                    )}
+                                </td>
                               </tr>
-                            ))}
+                            )})}
                           </tbody>
                         </table>
                       </div>
@@ -724,7 +876,7 @@
                                 <tr>
                                     <th className="p-3 md:p-4">學員姓名</th>
                                     <th className="p-3 md:p-4">會員等級</th>
-                                    <th className="p-3 md:p-4 text-center">累計堂數</th>
+                                    <th className="p-3 md:p-4 text-center">累計完成堂數</th>
                                     <th className="p-3 md:p-4 text-center">操作</th>
                                 </tr>
                             </thead>
@@ -783,23 +935,23 @@
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
                         <div className="bg-slate-800 p-5 text-white flex justify-between items-center shrink-0">
                             <h3 className="font-bold text-base md:text-lg">訓練日誌：{student.name}</h3>
-                            <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-2xl px-2 leading-none active:scale-90">&times;</button>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-3xl px-2 leading-none active:scale-90">&times;</button>
                         </div>
                         
                         <form onSubmit={handleSubmit} className="p-4 md:p-6 overflow-y-auto">
                             <div className="mb-5">
                                 <label className="block text-sm font-bold text-slate-700 mb-2">本次上課日期</label>
-                                <input type="date" required className="border border-gray-300 p-2.5 rounded w-full md:max-w-xs text-base" value={date} onChange={e=>setDate(e.target.value)} />
+                                <input type="date" required className="border border-gray-300 p-2.5 rounded-lg w-full md:max-w-xs text-base" value={date} onChange={e=>setDate(e.target.value)} />
                             </div>
 
                             <div className="mb-5">
-                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-3 border-b pb-2 gap-2">
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-4 border-b pb-3 gap-2">
                                     <label className="block text-sm md:text-base font-bold text-slate-700">訓練評分 / 時數</label>
                                     <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded w-fit font-bold">0 = 未訓練，最高 5 分</span>
                                 </div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-x-6 md:gap-y-4">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-x-6 md:gap-y-5">
                                     {SKILL_KEYS.map(skill => (
-                                        <div key={skill.key} className="flex flex-col bg-slate-50 p-2.5 rounded border border-slate-100">
+                                        <div key={skill.key} className="flex flex-col bg-slate-50 p-3 md:p-4 rounded-xl border border-slate-100">
                                             <div className="flex justify-between text-sm md:text-base font-bold text-slate-700 mb-2.5">
                                                 <span>{skill.label}</span>
                                                 <span className={stats[skill.key] > 0 ? "text-emerald-600 font-extrabold" : "text-slate-400"}>{stats[skill.key]}</span>
@@ -811,13 +963,13 @@
                             </div>
 
                             <div className="mb-4">
-                                <label className="block text-sm font-bold text-slate-700 mb-2">教練綜合短評 (日誌)</label>
+                                <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">教練綜合短評 (日誌)</label>
                                 <textarea className="w-full border border-gray-300 p-4 rounded-xl h-28 text-base outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 leading-relaxed" placeholder="例如：發力明顯進步，但防守步伐需要加強..." value={note} onChange={e=>setNote(e.target.value)}></textarea>
                             </div>
 
-                            <div className="flex justify-end gap-3 pt-4 border-t mt-auto">
-                                <button type="button" onClick={onClose} className="px-5 py-2.5 font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 text-sm active:scale-95 transition">取消</button>
-                                <button type="submit" disabled={submitting} className="px-5 py-2.5 font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-sm disabled:opacity-50 text-sm active:scale-95 transition">
+                            <div className="flex justify-end gap-3 pt-5 border-t mt-auto">
+                                <button type="button" onClick={onClose} className="px-5 py-2.5 font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 text-sm md:text-base active:scale-95 transition">取消</button>
+                                <button type="submit" disabled={submitting} className="px-5 py-2.5 font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-sm disabled:opacity-50 text-sm md:text-base active:scale-95 transition">
                                     {submitting ? '儲存中...' : '送出日誌'}
                                 </button>
                             </div>
