@@ -200,8 +200,11 @@
                     <div className="bg-slate-800 p-6 pb-2 text-white shadow-md relative z-10">
                         <div className="flex justify-between items-center mb-4">
                             <div>
-                                <h1 className="text-xl font-bold">楽動羽球</h1>
-                                <p className="text-sm text-slate-300 mt-1">{userRecord.name}，歡迎！</p>
+                                <div className="flex items-center gap-3">
+                                    <img src="./logo.png" alt="樂動羽球" className="w-10 h-10 rounded-full bg-white p-0.5 object-cover" />
+                                    <h1 className="text-xl font-bold tracking-wider">預約系統</h1>
+                                </div>
+                                <p className="text-sm text-slate-300 mt-2">{userRecord.name}，歡迎！</p>
                                 <div className="mt-2 inline-block bg-amber-500 text-slate-900 text-xs font-bold px-2 py-1 rounded shadow-sm">
                                     {LEVEL_NAMES[userLevel]} 會員
                                 </div>
@@ -464,7 +467,10 @@
             return (
                 <div className="max-w-6xl mx-auto min-h-screen flex flex-col bg-gray-50">
                     <div className="bg-slate-800 p-6 pb-0 text-white shadow-md relative z-10">
-                        <h1 className="text-2xl font-bold mb-4">教練管理後台</h1>
+                        <div className="flex items-center gap-3 mb-4">
+                            <img src="./logo.png" alt="樂動羽球" className="w-10 h-10 rounded-full bg-white p-0.5 object-cover" />
+                            <h1 className="text-2xl font-bold tracking-wider">樂動羽球 教練後台</h1>
+                        </div>
                         <div className="flex w-full mt-2">
                             <button onClick={()=>setActiveTab('slots')} className={`px-6 py-3 text-sm font-bold border-b-4 transition-colors ${activeTab === 'slots' ? 'border-emerald-400 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>排課與預約管理</button>
                             <button onClick={()=>setActiveTab('members')} className={`px-6 py-3 text-sm font-bold border-b-4 transition-colors ${activeTab === 'members' ? 'border-emerald-400 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>學員名單與日誌</button>
