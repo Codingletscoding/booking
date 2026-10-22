@@ -865,6 +865,7 @@
         const CoachMembersView = () => {
             const [members, setMembers] = useState([]);
             const [logModal, setLogModal] = useState({ isOpen: false, student: null });
+            const [viewModal, setViewModal] = useState({ isOpen: false, student: null }); // 【新增】檢視學員的彈窗狀態
 
             const fetchMembers = () => {
                 fetchAPI({ action: 'getCoachData' }).then(res => setMembers(res.members || []));
@@ -881,7 +882,7 @@
                                 <tr>
                                     <th className="p-3 md:p-4">學員姓名</th>
                                     <th className="p-3 md:p-4">會員等級</th>
-                                    <th className="p-3 md:p-4 text-center">累計完成堂數</th>
+                                    <th className="p-3 md:p-4 text-center">累計堂數</th>
                                     <th className="p-3 md:p-4 text-center">操作</th>
                                 </tr>
                             </thead>
@@ -897,9 +898,15 @@
                                             </td>
                                             <td className="p-3 md:p-4 text-center font-extrabold text-slate-600 text-xl md:text-2xl">{m.totalClasses}</td>
                                             <td className="p-3 md:p-4 text-center">
-                                                <button onClick={()=>setLogModal({isOpen: true, student: m})} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 md:px-6 rounded-lg shadow-sm text-sm active:scale-95 transition">
-                                                    撰寫日誌
-                                                </button>
+                                                <div className="flex justify-center gap-2">
+                                                    {/* 【新增】檢視按鈕 */}
+                                                    <button onClick={()=>setViewModal({isOpen: true, student: m})} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 md:py-2.5 md:px-4 rounded-lg shadow-sm text-xs md:text-sm active:scale-95 transition">
+                                                        檢視資料
+                                                    </button>
+                                                    <button onClick={()=>setLogModal({isOpen: true, student: m})} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 md:py-2.5 md:px-4 rounded-lg shadow-sm text-xs md:text-sm active:scale-95 transition">
+                                                        撰寫日誌
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
@@ -908,9 +915,185 @@
                         </table>
                     </div>
 
+                    {/* 彈出：寫日誌視窗 */}
                     {logModal.isOpen && <LogFormModal student={logModal.student} onClose={()=>setLogModal({isOpen: false, student: null})} />}
+                    
+                    {/* 彈出：檢視學員詳細資料視窗 */}
+                    {viewModal.isOpen && <StudentDetailsModal student={viewModal.student} onClose={()=>setViewModal({isOpen: false, student: null})} />}
                 </div>
             );
+        };
+
+        const LogFormModal = ({ student, onClose }) => {
+            const [date, setDate] = useState(formatDate(new Date()));
+            const [note, setNote] = useState('');
+            const [submitting, setSubmitting] = useState(false);
+            
+            const [stats, setStats] = useState({
+                clears: 0, drives: 0, lifts: 0, drops: 0, net: 0, pushes: 0, smashes: 0, defense: 0, combo: 0
+            });
+
+            const handleStatChange = (key, val) => {
+                setStats(prev => ({ ...prev, [key]: Number(val) }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setSubmitting(true);
+                await fetchAPI({ action: 'addLog', lineId: student.lineId, name: student.name, date: date, stats: stats, note: note });
+                alert('日誌儲存成功！');
+                setSubmitting(false);
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-900 bg-opacity-60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
+                        <div className="bg-slate-800 p-5 text-white flex justify-between items-center shrink-0">
+                            <h3 className="font-bold text-base md:text-lg">訓練日誌：{student.name}</h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-3xl px-2 leading-none active:scale-90">&times;</button>
+                        </div>
+                        
+                        <form onSubmit={handleSubmit} className="p-4 md:p-6 overflow-y-auto">
+                            <div className="mb-5">
+                                <label className="block text-sm font-bold text-slate-700 mb-2">本次上課日期</label>
+                                <input type="date" required className="border border-gray-300 p-2.5 rounded-lg w-full md:max-w-xs text-base" value={date} onChange={e=>setDate(e.target.value)} />
+                            </div>
+
+                            <div className="mb-5">
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-4 border-b pb-3 gap-2">
+                                    <label className="block text-sm md:text-base font-bold text-slate-700">訓練評分 / 時數</label>
+                                    <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded w-fit font-bold">0 = 未訓練，最高 5 分</span>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-x-6 md:gap-y-5">
+                                    {SKILL_KEYS.map(skill => (
+                                        <div key={skill.key} className="flex flex-col bg-slate-50 p-3 md:p-4 rounded-xl border border-slate-100">
+                                            <div className="flex justify-between text-sm md:text-base font-bold text-slate-700 mb-2.5">
+                                                <span>{skill.label}</span>
+                                                <span className={stats[skill.key] > 0 ? "text-emerald-600 font-extrabold" : "text-slate-400"}>{stats[skill.key]}</span>
+                                            </div>
+                                            <input type="range" min="0" max="5" step="0.5" value={stats[skill.key]} onChange={e => handleStatChange(skill.key, e.target.value)} className="w-full accent-emerald-500" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">教練綜合短評 (日誌)</label>
+                                <textarea className="w-full border border-gray-300 p-4 rounded-xl h-28 text-base outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 leading-relaxed" placeholder="例如：發力明顯進步，但防守步伐需要加強..." value={note} onChange={e=>setNote(e.target.value)}></textarea>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-5 border-t mt-auto">
+                                <button type="button" onClick={onClose} className="px-5 py-2.5 font-bold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 text-sm md:text-base active:scale-95 transition">取消</button>
+                                <button type="submit" disabled={submitting} className="px-5 py-2.5 font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-sm disabled:opacity-50 text-sm md:text-base active:scale-95 transition">
+                                    {submitting ? '儲存中...' : '送出日誌'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )
+        };
+
+        // --- 【新增】彈出表單：檢視學員詳細資料 ---
+        const StudentDetailsModal = ({ student, onClose }) => {
+            const [data, setData] = useState(null);
+
+            useEffect(() => {
+                // 利用原本給學生看的 API，教練只要帶入對方的 lineId 就能取得對方資料
+                fetchAPI({ action: 'getStudentStats', lineId: student.lineId }).then(res => setData(res));
+            }, [student]);
+
+            return (
+                <div className="fixed inset-0 bg-slate-900 bg-opacity-60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
+                        <div className="bg-slate-800 p-5 text-white flex justify-between items-center shrink-0">
+                            <h3 className="font-bold text-base md:text-lg flex items-center gap-2">
+                                <span className="text-emerald-400">學員檔案：</span> {student.name}
+                            </h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-3xl px-2 leading-none active:scale-90">&times;</button>
+                        </div>
+                        
+                        <div className="p-4 md:p-6 overflow-y-auto bg-gray-50 flex-1">
+                            {!data ? (
+                                <div className="text-center py-20 text-gray-500 font-bold animate-pulse">讀取學員資料中...</div>
+                            ) : (
+                                <div className="space-y-6">
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        {/* 雷達圖區塊 */}
+                                        <div className="bg-white rounded-2xl shadow-sm border p-5 md:p-6 h-fit">
+                                            <h3 className="font-bold text-slate-800 mb-4 ml-1 flex items-center text-base md:text-lg">
+                                                <span className="w-1.5 h-5 bg-emerald-500 rounded mr-2"></span>能力時數雷達
+                                            </h3>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {SKILL_KEYS.map(skill => (
+                                                    <CircleProgress key={skill.key} label={skill.label} value={data.stats[skill.key]} />
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* 歷史日誌區塊 */}
+                                        <div className="bg-white rounded-2xl shadow-sm border p-5 md:p-6">
+                                            <h3 className="font-bold text-slate-800 mb-4 ml-1 flex items-center text-base md:text-lg">
+                                                <span className="w-1.5 h-5 bg-blue-500 rounded mr-2"></span>歷史訓練日誌
+                                            </h3>
+                                            <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2">
+                                                {data.logs.length === 0 ? (
+                                                    <div className="text-center text-gray-400 text-sm py-6">尚無日誌紀錄</div>
+                                                ) : (
+                                                    data.logs.map((log, i) => (
+                                                        <div key={i} className="border-b border-dashed border-gray-200 pb-4 last:border-0 last:pb-0">
+                                                            <div className="text-sm font-bold text-emerald-600 mb-1.5">{log.date}</div>
+                                                            <p className="text-sm md:text-base text-gray-700 whitespace-pre-wrap leading-relaxed">{log.note || '本次無特別備註'}</p>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 預約紀錄區塊 */}
+                                    <div className="bg-white rounded-2xl shadow-sm border p-5 md:p-6">
+                                        <h3 className="font-bold text-slate-800 mb-4 ml-1 flex items-center text-base md:text-lg">
+                                            <span className="w-1.5 h-5 bg-amber-500 rounded mr-2"></span>歷史預約紀錄 <span className="ml-2 text-sm text-gray-500 font-normal">(共 {data.totalClasses} 堂已完成)</span>
+                                        </h3>
+                                        <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                                            <table className="w-full min-w-max text-left text-sm md:text-base whitespace-nowrap">
+                                                <thead className="sticky top-0 bg-white shadow-sm z-10">
+                                                    <tr className="text-gray-600 border-b border-gray-200">
+                                                        <th className="p-3">課程名稱</th>
+                                                        <th className="p-3">日期時間</th>
+                                                        <th className="p-3">狀態</th>
+                                                        <th className="p-3">後五碼</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {data.bookings.length === 0 ? (
+                                                        <tr><td colSpan="4" className="text-center text-gray-400 text-sm py-6">尚無預約紀錄</td></tr>
+                                                    ) : (
+                                                        data.bookings.map((b, i) => (
+                                                            <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                                                                <td className="p-3 font-bold text-gray-800">{b.slotTitle}</td>
+                                                                <td className="p-3 text-gray-500">{b.slotDate} {b.slotTime}</td>
+                                                                <td className="p-3">
+                                                                    <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${b.status === '已完成' ? 'bg-gray-100 text-gray-600' : 'bg-amber-100 text-amber-600'}`}>
+                                                                        {b.status}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-3 font-mono text-gray-500">{b.paymentCode || '-'}</td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )
         };
 
         const LogFormModal = ({ student, onClose }) => {
