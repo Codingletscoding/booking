@@ -16,6 +16,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
+        // 🔹 基本設定與常數
         const API_URL = 'https://script.google.com/macros/s/AKfycbzEgH-9zNLvzhNzsZISAc6a3IY4ojbMhpYDUPOgkFElBt1pqTYhJINyaezPfEjMlo9KLA/exec';
         const LIFF_ID = '2012115245-A7HBSYsv';
 
@@ -31,6 +32,7 @@
 
         const LOCATIONS_LIST = ['關聖里活動中心', '永康嘉世', '仁德羽潮', '南區羽潮', '自理場地(需私訊確認)'];
 
+        // 🔹 輔助函數 (Helper Functions)
         const getVIPDiscount = (lvl) => {
             const l = Number(lvl);
             if(l === 2) return 0.98;
@@ -104,9 +106,10 @@
         };
 
         // ==========================================
-        // 🔹 共用元件區
+        // 🔹 獨立 UI 共用元件
         // ==========================================
         
+        // 能力圓環
         const CircleProgress = ({ label, value }) => {
             const max = 20; 
             const radius = 32;
@@ -135,6 +138,7 @@
             );
         };
 
+        // 學員預約追蹤卡片
         const BookingStatusItem = ({ booking, onUpdate }) => {
             const [code, setCode] = useState(booking.paymentCode);
             const [updating, setUpdating] = useState(false);
@@ -182,6 +186,7 @@
             );
         };
 
+        // 教練寫日誌 (結課) 共用表單
         const LogFormModal = ({ targetData, onClose, onSuccess }) => {
             const [date, setDate] = useState(formatDate(new Date()));
             const [note, setNote] = useState('');
@@ -262,6 +267,7 @@
             )
         };
 
+        // 學員詳細資料檢視 (教練端)
         const StudentDetailsModal = ({ student, onClose }) => {
             const [data, setData] = useState(null);
             useEffect(() => {
@@ -354,7 +360,7 @@
         };
 
         // ==========================================
-        // 🔹 學生端視圖區
+        // 🔹 學生端主頁面與子元件
         // ==========================================
 
         const RegisterView = ({ profile, onRegistered }) => {
@@ -766,7 +772,7 @@
         };
 
         // ==========================================
-        // 🔹 教練端視圖區
+        // 🔹 教練端主頁面與子元件
         // ==========================================
 
         const CoachSlotsView = () => {
@@ -988,7 +994,7 @@
                     </div>
                 </div>
               </div>
-              {/* 共用寫日誌彈窗 (傳入 targetData={lineId, name, bookingId}) */}
+              {/* 共用寫日誌彈窗 */}
               {logModalTarget && <LogFormModal targetData={logModalTarget} onClose={() => setLogModalTarget(null)} onSuccess={fetchData} />}
             </>
           );
@@ -1035,7 +1041,7 @@
                                                         檢視資料
                                                     </button>
                                                     <button onClick={()=>setLogModalTarget({ lineId: m.lineId, name: m.name })} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 md:px-5 rounded-lg shadow-sm text-xs md:text-sm active:scale-95 transition">
-                                                        撰寫日誌
+                                                        補登日誌
                                                     </button>
                                                 </div>
                                             </td>
