@@ -16,7 +16,6 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // API 網址與 LIFF ID
         const API_URL = 'https://script.google.com/macros/s/AKfycbzEgH-9zNLvzhNzsZISAc6a3IY4ojbMhpYDUPOgkFElBt1pqTYhJINyaezPfEjMlo9KLA/exec';
         const LIFF_ID = '2012115245-A7HBSYsv';
 
@@ -104,7 +103,6 @@
           return res.json();
         };
 
-        // --- 元件：圓形儀表板 ---
         const CircleProgress = ({ label, value }) => {
             const max = 20; 
             const radius = 32;
@@ -133,7 +131,6 @@
             );
         };
 
-        // --- 元件：預約紀錄卡片 (學員端) ---
         const BookingStatusItem = ({ booking, onUpdate }) => {
             const [code, setCode] = useState(booking.paymentCode);
             const [updating, setUpdating] = useState(false);
@@ -181,7 +178,6 @@
             );
         };
 
-        // --- 元件：寫日誌表單 (教練端結課共用) ---
         const LogFormModal = ({ targetData, onClose, onSuccess }) => {
             const [date, setDate] = useState(formatDate(new Date()));
             const [note, setNote] = useState('');
@@ -262,7 +258,6 @@
             )
         };
 
-        // --- 元件：學員詳細資料彈窗 (教練端) ---
         const StudentDetailsModal = ({ student, onClose }) => {
             const [data, setData] = useState(null);
             useEffect(() => {
@@ -354,7 +349,6 @@
             )
         };
 
-        // --- 主元件：App 進入點 ---
         const App = () => {
           const [liffState, setLiffState] = useState({ init: false, profile: null });
           const [userRecord, setUserRecord] = useState(null);
@@ -389,7 +383,6 @@
           if (view === 'coach') return <CoachDashboard />;
         };
 
-        // --- 學生：首次註冊 ---
         const RegisterView = ({ profile, onRegistered }) => {
           const [form, setForm] = useState({ name: profile.displayName || '', age: '', phone: '' });
           const [submitting, setSubmitting] = useState(false);
@@ -438,7 +431,6 @@
           );
         };
 
-        // --- 學生：雙頁籤總成 ---
         const StudentDashboard = ({ profile, userRecord }) => {
             const [activeTab, setActiveTab] = useState('booking'); 
             const userLevel = userRecord.level || 1;
@@ -478,7 +470,6 @@
             )
         };
 
-        // --- 學生功能 1：課程預約 ---
         const StudentBookingView = ({ profile, userRecord }) => {
           const [slots, setSlots] = useState([]);
           const [status, setStatus] = useState('idle');
@@ -733,7 +724,6 @@
           );
         };
 
-        // --- 學生功能 2：我的訓練紀錄 ---
         const StudentRecordsView = ({ lineId }) => {
             const [data, setData] = useState(null);
 
@@ -801,7 +791,6 @@
             );
         };
 
-        // --- 教練：雙頁籤總成 ---
         const CoachDashboard = () => {
             const [activeTab, setActiveTab] = useState('slots'); 
             
@@ -824,7 +813,6 @@
             );
         };
 
-        // --- 教練功能 1：排課管理 ---
         const CoachSlotsView = () => {
           const [form, setForm] = useState({ 
             mode: 'single', title: '新手團課', location: '關聖里活動中心',
@@ -898,6 +886,7 @@
           };
 
           return (
+            <>
               <div className="grid md:grid-cols-3 gap-6 md:gap-8">
                 <div className="bg-white p-5 md:p-8 rounded-2xl shadow-sm border col-span-1 h-fit">
                   <h2 className="font-bold text-lg md:text-xl mb-5 border-b pb-3">新增課程 / 開放時段</h2>
@@ -1043,13 +1032,11 @@
                     </div>
                 </div>
               </div>
-              {/* 共用寫日誌彈窗 */}
               {logModalTarget && <LogFormModal targetData={logModalTarget} onClose={() => setLogModalTarget(null)} onSuccess={fetchData} />}
-            </div>
+            </>
           );
         };
 
-        // --- 教練功能 2：學員名單 ---
         const CoachMembersView = () => {
             const [members, setMembers] = useState([]);
             const [viewModal, setViewModal] = useState({ isOpen: false, student: null });
@@ -1091,7 +1078,7 @@
                                                         檢視資料
                                                     </button>
                                                     <button onClick={()=>setLogModalTarget({ lineId: m.lineId, name: m.name })} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 md:px-5 rounded-lg shadow-sm text-xs md:text-sm active:scale-95 transition">
-                                                        撰寫日誌
+                                                        補登日誌
                                                     </button>
                                                 </div>
                                             </td>
@@ -1102,12 +1089,11 @@
                         </table>
                     </div>
                     {viewModal.isOpen && <StudentDetailsModal student={viewModal.student} onClose={()=>setViewModal({isOpen: false, student: null})} />}
-                    {logModalTarget && <LogFormModal targetData={logModalTarget} onClose={() => setLogModalTarget(null)} />}
+                    {logModalTarget && <LogFormModal targetData={logModalTarget} onClose={() => setLogModalTarget(null)} onSuccess={fetchMembers} />}
                 </div>
             );
         };
-        
-        // --- 教練檢視學員資料元件 ---
+
         const StudentDetailsModal = ({ student, onClose }) => {
             const [data, setData] = useState(null);
             useEffect(() => {
