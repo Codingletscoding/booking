@@ -368,6 +368,7 @@
             )
         };
 
+
         // ==========================================
         // 🔹 學生端主頁面與子視圖
         // ==========================================
@@ -625,6 +626,7 @@
                 )}
               </div>
 
+              {/* 預約結帳彈窗 */}
               {bookingTarget && (
                 <div className="fixed inset-0 bg-slate-900 bg-opacity-60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-[pulse_0.2s_ease-out_1]">
@@ -685,7 +687,9 @@
                 }
             };
 
-            useEffect(() => { fetchRecords(); }, [lineId]);
+            useEffect(() => { 
+                fetchRecords(); 
+            }, [lineId]);
 
             if (!data) return <div className="p-10 text-center text-gray-400 font-bold animate-pulse">讀取資料中...</div>;
 
@@ -861,7 +865,7 @@
           };
 
           return (
-            <div>
+            <div className="space-y-6 md:space-y-8">
               <div className="grid md:grid-cols-3 gap-6 md:gap-8">
                 <div className="bg-white p-5 md:p-8 rounded-2xl shadow-sm border col-span-1 h-fit">
                   <h2 className="font-bold text-lg md:text-xl mb-5 border-b pb-3">新增課程 / 開放時段</h2>
@@ -1008,6 +1012,7 @@
                     </div>
                 </div>
               </div>
+              {/* 共用寫日誌彈窗 (傳入 targetData={lineId, name, bookingId}) */}
               {logModalTarget && <LogFormModal targetData={logModalTarget} onClose={() => setLogModalTarget(null)} onSuccess={fetchData} />}
             </div>
           );
